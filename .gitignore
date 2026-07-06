@@ -1,0 +1,35 @@
+venv/
+__pycache__/
+*.pyc
+*.png
+*.html
+!templates/*.html
+.env
+snapshots/
+
+# Configs and subscriber state — contain chat IDs / endpoints
+legacy_config.json
+legacy_subscribers.json
+
+# Local launcher scripts — contain machine-specific paths
+launch_legacy_chrome.bat
+run_bot_logged.bat
+run_picster_logged.bat
+
+# Runtime state files
+bot_heartbeat.json
+lgc_items_cache.json
+checked_avails_cache.json
+crew_schedule.json
+legacy_api_capture.jsonl
+
+# Logs, exports, local tooling
+*.log
+*.eml
+.claude
+
+# Local scratch / misc
+local-symlink-removed
+Ankara source files/
+Istanbul source files/
+legacy source files/

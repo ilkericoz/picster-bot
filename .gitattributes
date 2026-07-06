@@ -1,0 +1,4 @@
+# Normalize line endings: store LF in repo, check out native on each OS
+* text=auto eol=lf
+*.py text eol=lf
+*.bat text eol=crlf

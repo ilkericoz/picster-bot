@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bot Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ── CSS variables (dark defaults) ─────────────────── */
+    :root {
+      --bg:           #0a0f1a;
+      --bg-surface:   #0d1625;
+      --bg-card:      #111827;
+      --bg-input:     #1a2235;
+      --bg-hover:     #1a2235;
+      --border:       #1e2d42;
+      --border-input: #2a3a50;
+      --text:         #e2e8f0;
+      --text-bright:  #cbd5e1;
+      --text-muted:   #94a3b8;
+      --text-dim:     #64748b;
+      --text-faint:   #475569;
+      --text-hint:    #64748b;
+      --toggle-track: #334155;
+      --bg-inc:    #052e16; --color-inc: #4ade80; --border-inc: #16a34a;
+      --bg-exc:    #2d0a0a; --color-exc: #f87171; --border-exc: #b91c1c;
+      --bg-neutral:#1e293b; --color-neutral:#64748b;
+      --bg-warn:   #1c1407; --color-warn:  #fbbf24;
+      --bg-today:  #071a07;
+      --cal-filter:invert(.6);
+      --scrollbar: #2a3a50;
+    }
+    body.light {
+      --bg:           #f8fafc;
+      --bg-surface:   #f1f5f9;
+      --bg-card:      #ffffff;
+      --bg-input:     #f1f5f9;
+      --bg-hover:     #e8eef4;
+      --border:       #e2e8f0;
+      --border-input: #cbd5e1;
+      --text:         #0f172a;
+      --text-bright:  #1e293b;
+      --text-muted:   #475569;
+      --text-dim:     #64748b;
+      --text-faint:   #94a3b8;
+      --text-hint:    #475569;
+      --toggle-track: #cbd5e1;
+      --bg-inc:    #dcfce7; --color-inc: #15803d; --border-inc: #16a34a;
+      --bg-exc:    #fee2e2; --color-exc: #b91c1c; --border-exc: #ef4444;
+      --bg-neutral:#f1f5f9; --color-neutral:#64748b;
+      --bg-warn:   #fef9c3; --color-warn:  #92400e;
+      --bg-today:  #f0fdf4;
+      --cal-filter:none;
+      --scrollbar: #cbd5e1;
+    }
+
+    body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; transition:background .2s,color .2s; }
+
+    .toggle-input:checked + .toggle-track { background:#3b82f6; }
+    .toggle-input:checked + .toggle-track .toggle-thumb { transform:translateX(20px); }
+    .toggle-track { width:44px;height:24px;background:var(--toggle-track);border-radius:12px;position:relative;transition:background .2s;cursor:pointer;flex-shrink:0; }
+    .toggle-thumb { width:18px;height:18px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform .2s; }
+
+    input[type=number],input[type=text],input[type=time],input[type=date],input[type=search] {
+      background:var(--bg-input);border:1px solid var(--border-input);color:var(--text);
+      border-radius:8px;padding:7px 12px;font-size:13px;outline:none;transition:border-color .15s;
+    }
+    input:focus { border-color:#3b82f6; }
+    input[type=date]::-webkit-calendar-picker-indicator,
+    input[type=time]::-webkit-calendar-picker-indicator { filter:var(--cal-filter); }
+
+    .card { background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:20px; }
+    .label-sm { font-size:11px;color:var(--text-dim);font-weight:500;text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px; }
+    .field-label { font-size:12px;color:var(--text-muted);margin-bottom:5px; }
+    .divider { border:none;border-top:1px solid var(--border);margin:14px 0; }
+    .tab-active   { border-bottom:2px solid #3b82f6;color:#60a5fa; }
+    .tab-inactive { border-bottom:2px solid transparent;color:var(--text-dim); }
+    .tab-inactive:hover { color:var(--text-muted); }
+
+    .city-chip {
+      font-size:11px;font-weight:500;padding:3px 9px;border-radius:999px;cursor:pointer;
+      border:1px solid var(--border-input);background:transparent;color:var(--text-dim);
+      transition:background .12s,border-color .12s,color .12s;white-space:nowrap;
+    }
+    .city-chip:hover  { border-color:#3b82f6;color:#93c5fd; }
+    .city-chip.active { background:#172554;border-color:#3b82f6;color:#93c5fd; }
+    body.light .city-chip.active { background:#eff6ff;color:#2563eb; }
+
+    .item-list { max-height:320px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent; }
+    .item-list::-webkit-scrollbar { width:4px; }
+    .item-list::-webkit-scrollbar-thumb { background:var(--scrollbar);border-radius:4px; }
+
+    .item-row { display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px; }
+    .item-row:hover { background:var(--bg-hover); }
+    .item-name { flex:1;font-size:13px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+    .item-row.is-include .item-name { color:#4ade80; }
+    .item-row.is-exclude .item-name { color:#f87171; }
+    body.light .item-row.is-include .item-name { color:#15803d; }
+    body.light .item-row.is-exclude .item-name { color:#b91c1c; }
+
+    .state-btn {
+      flex-shrink:0;width:22px;height:22px;border-radius:5px;
+      border:1px solid var(--border-input);background:transparent;
+      font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      transition:background .12s,border-color .12s,color .12s;color:var(--text-faint);
+    }
+    .state-btn:hover { border-color:#3b82f6;color:#93c5fd; }
+    .inc-btn.on { background:var(--bg-inc);border-color:var(--border-inc);color:var(--color-inc); }
+    .exc-btn.on { background:var(--bg-exc);border-color:var(--border-exc);color:var(--color-exc); }
+
+    .badge { font-size:11px;font-weight:500;padding:2px 7px;border-radius:999px;line-height:1.4; }
+    .badge-inc     { background:var(--bg-inc);color:var(--color-inc); }
+    .badge-exc     { background:var(--bg-exc);color:var(--color-exc); }
+    .badge-neutral { background:var(--bg-neutral);color:var(--color-neutral); }
+    .badge-warn    { background:var(--bg-warn);color:var(--color-warn); }
+
+    #toast { transition:opacity .25s,transform .25s;opacity:0;transform:translateY(6px); }
+    #toast.show { opacity:1;transform:translateY(0); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    @keyframes spin  { to{transform:rotate(360deg)} }
+    .spinning { animation:spin .7s linear infinite;display:inline-block; }
+
+    .bw-row {
+      background:var(--bg-surface);border:1px solid var(--border);
+      border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;
+    }
+    .bw-advanced { border-top:1px solid var(--border);margin-top:8px;padding-top:8px; }
+    .bw-type-chip {
+      font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;cursor:pointer;
+      border:1px solid var(--border-input);background:transparent;color:var(--text-dim);
+      transition:background .12s,border-color .12s,color .12s;white-space:nowrap;
+    }
+    .bw-type-chip:hover { border-color:#3b82f6;color:#93c5fd; }
+    .bw-type-chip.on { background:#172554;border-color:#3b82f6;color:#93c5fd; }
+    body.light .bw-type-chip.on { background:#eff6ff;color:#2563eb; }
+
+    .btn-sec {
+      background:var(--bg-input);border:1px solid var(--border-input);color:var(--text-muted);
+      border-radius:8px;cursor:pointer;transition:border-color .12s,color .12s,background .12s;
+    }
+    .btn-sec:hover { border-color:#3b82f6;color:#60a5fa;background:var(--bg-hover); }
+    .btn-icon-expand {
+      flex-shrink:0;width:24px;height:24px;border-radius:5px;
+      border:1px solid var(--border-input);background:transparent;color:var(--text-dim);
+      font-size:12px;cursor:pointer;transition:border-color .12s,color .12s;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .btn-icon-expand:hover { border-color:#3b82f6;color:#60a5fa; }
+    .btn-remove { color:var(--text-faint);background:transparent;border:none;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0; }
+    .btn-remove:hover { color:#f87171; }
+
+    .theme-btn {
+      font-size:11px;padding:2px 8px;border-radius:999px;cursor:pointer;
+      border:1px solid transparent;background:transparent;color:var(--text-dim);
+      transition:all .12s;
+    }
+    .theme-btn.active { background:var(--bg-input);border-color:var(--border-input);color:var(--text-muted); }
+    .theme-btn:hover:not(.active) { color:var(--text-muted); }
+
+    #crew-schedule-table { border-collapse:collapse;width:100%; }
+    #crew-schedule-table th {
+      font-size:11px;color:var(--text-dim);font-weight:500;text-transform:uppercase;
+      letter-spacing:.06em;padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);
+    }
+    #crew-schedule-table td { padding:6px 8px;border-bottom:1px solid var(--bg-surface); }
+    #crew-schedule-table tr:last-child td { border-bottom:none; }
+    #crew-schedule-table tr.row-today td { background:var(--bg-today); }
+    #crew-schedule-table tr.row-past  td { opacity:.45; }
+  </style>
+</head>
+<body class="min-h-screen">
+<script>
+  (function(){
+    var m = localStorage.getItem('theme') || 'auto';
+    var sys = window.matchMedia('(prefers-color-scheme: light)').matches;
+    if (m === 'light' || (m === 'auto' && sys)) document.body.classList.add('light');
+  })();
+</script>
+
+  <header style="background:var(--bg-surface);border-bottom:1px solid var(--border)" class="px-6 py-4 flex items-center justify-between">
+    <span class="text-base font-semibold tracking-tight">Bot Dashboard</span>
+    <span class="flex items-center gap-4">
+      <span id="theme-toggle" class="flex items-center gap-0.5">
+        <button class="theme-btn" data-mode="auto"  onclick="setTheme('auto')">Auto</button>
+        <button class="theme-btn" data-mode="dark"  onclick="setTheme('dark')">Dark</button>
+        <button class="theme-btn" data-mode="light" onclick="setTheme('light')">Light</button>
+      </span>
+      <span class="flex items-center gap-2 text-xs" style="color:var(--text-dim)">
+        <span id="status-dot" class="inline-block w-2 h-2 rounded-full" style="background:#475569"></span>
+        <span id="status-text">Checking…</span>
+      </span>
+    </span>
+  </header>
+
+  <main class="max-w-xl mx-auto px-5 py-8 space-y-4">
+
+    <!-- ══ LEGACY PANEL ══ -->
+    <div id="panel-lgc">
+      <p class="text-sm font-semibold mb-4" style="color:var(--text-muted)">Legacy Bot <span class="ml-2 text-xs font-normal" style="color:var(--text-faint)">legacy_config.json</span></p>
+      <div class="card mb-4">
+        <p class="label-sm">Check Interval</p>
+        <div class="flex gap-3 items-end">
+          <div class="flex-1"><p class="field-label">Min (sec)</p><input id="lgc-min" type="number" min="1" step="1" class="w-full"></div>
+          <span style="color:var(--border-input);padding-bottom:9px">—</span>
+          <div class="flex-1"><p class="field-label">Max (sec)</p><input id="lgc-max" type="number" min="1" step="1" class="w-full"></div>
+        </div>
+      </div>
+      <div class="card mb-4">
+        <p class="label-sm">Options</p>
+        <div class="flex items-center justify-between py-1 mb-3">
+          <div><p class="text-sm" style="color:var(--text-bright)">Screenshot on Found</p><p class="text-xs" style="color:var(--text-faint)">Capture when booking detected</p></div>
+          <label class="cursor-pointer"><input type="checkbox" id="lgc-screenshot" class="toggle-input sr-only"><div class="toggle-track"><div class="toggle-thumb"></div></div></label>
+        </div>
+        <div class="flex gap-3">
+          <div class="flex-1"><p class="field-label">Human Dwell Min (sec)</p><input id="lgc-dwell-min" type="number" min="0" step="1" class="w-full"></div>
+          <div class="flex-1"><p class="field-label">Human Dwell Max (sec)</p><input id="lgc-dwell-max" type="number" min="0" step="1" class="w-full"></div>
+        </div>
+      </div>
+      <div id="lgc-urls" class="space-y-4 mb-5"></div>
+      <button onclick="saveFH()" class="w-full py-2.5 rounded-xl text-sm font-medium text-white" style="background:#2563eb" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#2563eb'">Save Changes</button>
+    </div>
+
+    <!-- ══ CREW SCHEDULE PANEL ══ -->
+    <div id="panel-crew">
+      <p class="text-sm font-semibold mb-4" style="color:var(--text-muted)">
+        Crew Schedule
+        <span class="ml-2 text-xs font-normal" style="color:var(--text-faint)">crew_schedule.json</span>
+      </p>
+      <div class="card">
+        <div class="flex items-center justify-between mb-3">
+          <p class="label-sm" style="margin:0">Booked slots</p>
+          <div class="flex gap-2">
+            <button id="history-toggle-btn" onclick="toggleHistory()" class="btn-sec text-xs px-3 py-1">History</button>
+            <button id="crew-sync-btn" onclick="syncCrewSchedule(this)" class="btn-sec text-xs px-3 py-1">↻ Sync from dashboard</button>
+            <button onclick="toggleAddEntry()" class="btn-sec text-xs px-3 py-1">+ Add manually</button>
+          </div>
+        </div>
+
+        <!-- Add-entry form (hidden by default) -->
+        <div id="add-entry-form" class="hidden mb-3 p-3 rounded-xl" style="background:var(--bg-surface);border:1px solid var(--border)">
+          <p class="field-label mb-2">New booking entry</p>
+          <div class="flex gap-2 mb-2">
+            <div class="flex-1"><p class="field-label" style="font-size:11px">Date</p><input type="date" class="ae-date w-full"></div>
+            <div><p class="field-label" style="font-size:11px">Start</p><input type="time" class="ae-time-start" style="width:100px"></div>
+            <div><p class="field-label" style="font-size:11px">End</p><input type="time" class="ae-time-end" style="width:100px"></div>
+          </div>
+          <div class="flex gap-2 mb-3">
+            <div class="flex-1"><p class="field-label" style="font-size:11px">Tour / listing</p><input type="text" class="ae-tour w-full" placeholder="e.g. Private Photoshoot"></div>
+            <div class="flex-1"><p class="field-label" style="font-size:11px">Customer name</p><input type="text" class="ae-name w-full" placeholder="Optional"></div>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="submitAddEntry()" class="text-xs px-4 py-1.5 rounded-lg text-white" style="background:#16a34a" onmouseover="this.style.background='#15803d'" onmouseout="this.style.background='#16a34a'">Add</button>
+            <button onclick="toggleAddEntry()" class="btn-sec text-xs px-4 py-1.5">Cancel</button>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto">
+          <table id="crew-schedule-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Time</th>
+                <th>Tour</th>
+                <th>Customer</th>
+                <th>Source</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="crew-schedule-body">
+              <tr><td colspan="6" style="color:var(--text-faint);font-size:13px;padding:12px 8px;text-align:center">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <div id="toast" class="fixed bottom-6 right-6 text-sm font-medium px-4 py-2.5 rounded-xl shadow-xl pointer-events-none" style="background:#16a34a;color:white">Saved</div>
+
+  <script>
+    const LGC    = {{ lgc    | tojson }};
+    const CACHE = {{ cache | tojson }};
+
+    const AUTO_CHECK_HOURS = 6;
+
+    const CARD = LGC.urls.map(function(u) {
+      var states = {};
+      (u.keywords        || []).forEach(function(k) { states[k] = 'include'; });
+      (u.exclude_keywords|| []).forEach(function(k) { states[k] = 'exclude'; });
+      return { items: [], cityItems: {}, calendars: [], states: states, city: 'All', selectedOnly: false };
+    });
+
+    document.getElementById('lgc-min').value       = LGC.check_interval_min_seconds;
+    document.getElementById('lgc-max').value       = LGC.check_interval_max_seconds;
+    document.getElementById('lgc-screenshot').checked = !!LGC.screenshot_on_found;
+    document.getElementById('lgc-dwell-min').value = LGC.human_dwell_min_seconds;
+    document.getElementById('lgc-dwell-max').value = LGC.human_dwell_max_seconds;
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function getCard(idx) { return document.querySelector('#lgc-urls [data-index="' + idx + '"]'); }
+
+    function formatAge(iso) {
+      if (!iso) return '';
+      var s = (Date.now() - new Date(iso).getTime()) / 1000;
+      if (s < 60)    return 'just now';
+      if (s < 3600)  return Math.floor(s / 60)   + ' min ago';
+      if (s < 86400) return Math.floor(s / 3600)  + ' hr ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+
+    function buildItemsList(cityItems) {
+      var cals = Object.keys(cityItems);
+      var first = cals[0] ? (cityItems[cals[0]] || []) : [];
+      var seen  = new Set(first);
+      var extra = [];
+      cals.forEach(function(c) {
+        (cityItems[c] || []).forEach(function(n) {
+          if (!seen.has(n)) { seen.add(n); extra.push(n); }
+        });
+      });
+      return first.concat(extra);
+    }
+
+    function applyData(idx, data, scannedAt) {
+      CARD[idx].calendars = data.calendars || [];
+      CARD[idx].cityItems = data.city_items || {};
+      CARD[idx].items     = buildItemsList(data.city_items || {});
+
+      var card = getCard(idx);
+      card.querySelector('.item-list-wrap').classList.remove('hidden');
+      card.querySelector('.item-search').value = '';
+      renderCityChips(idx);
+      renderItemList(idx);
+      setScannedAt(idx, scannedAt);
+
+      card.querySelectorAll('.booking-window-row').forEach(function(row) {
+        var adv = row.querySelector('.bw-advanced');
+        if (adv && !adv.classList.contains('hidden')) {
+          refreshWindowTypeChips(row, idx);
+        }
+      });
+    }
+
+    function setScannedAt(idx, iso) {
+      var card = getCard(idx);
+      var el   = card.querySelector('.scan-age');
+      if (iso) el.textContent = 'Last scanned: ' + formatAge(iso);
+      else     el.textContent = '';
+    }
+
+    function updateSummary(idx) {
+      var st = CARD[idx].states, inc = [], exc = [];
+      Object.keys(st).forEach(function(k) {
+        if (st[k] === 'include') inc.push(k); else if (st[k] === 'exclude') exc.push(k);
+      });
+      var card = getCard(idx);
+      card.querySelector('.sum-inc').innerHTML = inc.length
+        ? '<span class="badge badge-inc">+' + inc.length + ' included</span> <span style="font-size:12px;color:var(--text-dim)">' + esc(inc.slice(0,3).join(', ')) + (inc.length > 3 ? '…' : '') + '</span>'
+        : '<span class="badge badge-neutral">none included</span>';
+      card.querySelector('.sum-exc').innerHTML = exc.length
+        ? '<span class="badge badge-exc">−' + exc.length + ' excluded</span> <span style="font-size:12px;color:var(--text-dim)">' + esc(exc.slice(0,3).join(', ')) + (exc.length > 3 ? '…' : '') + '</span>'
+        : '';
+    }
+
+    function visibleItems(idx) {
+      var c = CARD[idx], city = c.city;
+      if (city === 'All' || !c.cityItems[city] || !c.cityItems[city].length) return c.items;
+      return c.cityItems[city];
+    }
+
+    function toggleSelectedOnly(idx, btn) {
+      CARD[idx].selectedOnly = !CARD[idx].selectedOnly;
+      btn.style.borderColor = CARD[idx].selectedOnly ? '#3b82f6' : '';
+      btn.style.color       = CARD[idx].selectedOnly ? '#60a5fa' : '';
+      btn.style.background  = CARD[idx].selectedOnly ? '#172554' : '';
+      renderItemList(idx);
+    }
+
+    function renderItemList(idx) {
+      var card   = getCard(idx);
+      var search = (card.querySelector('.item-search').value || '').toLowerCase();
+      var pool   = visibleItems(idx);
+      var st     = CARD[idx].states;
+      var vis    = pool.filter(function(n) {
+        if (CARD[idx].selectedOnly && !st[n]) return false;
+        return !search || n.toLowerCase().indexOf(search) !== -1;
+      });
+
+      var oldList = card.querySelector('.item-list');
+      var list    = oldList.cloneNode(false);
+      oldList.replaceWith(list);
+
+      if (!vis.length) {
+        var emptyMsg = search ? 'No matches.' : CARD[idx].selectedOnly ? 'Nothing selected yet.' : 'No items loaded.';
+        list.innerHTML = '<div style="color:var(--text-faint);font-size:13px;padding:12px 6px">' + emptyMsg + '</div>';
+        updateSummary(idx);
+        return;
+      }
+
+      vis.forEach(function(name) {
+        var s   = st[name] || '';
+        var row = document.createElement('div');
+        row.className  = 'item-row' + (s === 'include' ? ' is-include' : s === 'exclude' ? ' is-exclude' : '');
+        row.dataset.name = name;
+        row.innerHTML  =
+          '<span class="item-name" title="' + esc(name) + '">' + esc(name) + '</span>' +
+          '<button class="state-btn inc-btn' + (s === 'include' ? ' on' : '') + '" title="Include">✓</button>' +
+          '<button class="state-btn exc-btn' + (s === 'exclude' ? ' on' : '') + '" title="Exclude">✕</button>';
+        list.appendChild(row);
+      });
+
+      list.addEventListener('click', function(e) {
+        var btn = e.target.closest('.inc-btn,.exc-btn');
+        if (!btn) return;
+        var row  = btn.closest('.item-row');
+        var name = row.dataset.name;
+        var act  = btn.classList.contains('inc-btn') ? 'include' : 'exclude';
+        if (CARD[idx].states[name] === act) delete CARD[idx].states[name];
+        else CARD[idx].states[name] = act;
+        var s2 = CARD[idx].states[name] || '';
+        row.className = 'item-row' + (s2 === 'include' ? ' is-include' : s2 === 'exclude' ? ' is-exclude' : '');
+        row.querySelector('.inc-btn').className = 'state-btn inc-btn' + (s2 === 'include' ? ' on' : '');
+        row.querySelector('.exc-btn').className = 'state-btn exc-btn' + (s2 === 'exclude' ? ' on' : '');
+        row.querySelector('.item-name').style.color = '';
+        updateSummary(idx);
+        btn.closest('[data-index]').querySelectorAll('.booking-window-row').forEach(function(wr) {
+          if (!wr.querySelector('.bw-advanced').classList.contains('hidden')) {
+            refreshWindowTypeChips(wr, idx);
+          }
+        });
+      });
+
+      updateSummary(idx);
+    }
+
+    function renderCityChips(idx) {
+      var card = getCard(idx);
+      var oldWrap = card.querySelector('.city-chips');
+      var wrap    = oldWrap.cloneNode(false);
+      oldWrap.replaceWith(wrap);
+
+      var cities = ['All'].concat(CARD[idx].calendars);
+      wrap.innerHTML = cities.map(function(c) {
+        return '<button class="city-chip' + (CARD[idx].city === c ? ' active' : '') +
+               '" data-city="' + esc(c) + '">' + esc(c) + '</button>';
+      }).join('');
+
+      wrap.addEventListener('click', function(e) {
+        var chip = e.target.closest('.city-chip');
+        if (!chip) return;
+        CARD[idx].city = chip.dataset.city;
+        wrap.querySelectorAll('.city-chip').forEach(function(b) {
+          b.classList.toggle('active', b.dataset.city === CARD[idx].city);
+        });
+        card.querySelector('.item-search').value = '';
+        renderItemList(idx);
+      });
+    }
+
+    async function loadItems(idx) {
+      var card  = getCard(idx);
+      var btn   = card.querySelector('.load-items-btn');
+      var orig  = btn.innerHTML;
+      btn.innerHTML = '<span class="spinning">↻</span> Scanning…';
+      btn.disabled  = true;
+      card.querySelector('.scan-note').style.display = 'block';
+
+      var prevItems = new Set(CARD[idx].items);
+      try {
+        var r    = await fetch('/api/legacy/items');
+        var data = await r.json();
+        if (data.error) { toast(data.error, true); return; }
+
+        var newItems = buildItemsList(data.city_items || {});
+        var added    = newItems.filter(function(n){ return !prevItems.has(n); });
+        var removed  = Array.from(prevItems).filter(function(n){ return !newItems.includes(n); });
+
+        applyData(idx, data, data.scanned_at);
+
+        if (added.length || removed.length) {
+          toast((added.length   ? '+' + added.length   + ' new' : '') +
+                (added.length && removed.length ? ', ' : '') +
+                (removed.length ? '−' + removed.length + ' removed' : '') + ' items');
+        } else {
+          toast('No changes — ' + newItems.length + ' items');
+        }
+      } catch(e) {
+        toast('Failed: ' + e.message, true);
+      } finally {
+        btn.innerHTML = '↻ Re-scan';
+        btn.disabled  = false;
+        card.querySelector('.scan-note').style.display = 'none';
+      }
+    }
+
+    async function autoCheck(idx, scannedAt) {
+      var ageHours = (Date.now() - new Date(scannedAt).getTime()) / 3_600_000;
+      if (ageHours < AUTO_CHECK_HOURS) return;
+
+      console.log('[UI] Cache is ' + ageHours.toFixed(1) + 'h old — auto-checking…');
+      var card = getCard(idx);
+      card.querySelector('.scan-age').textContent += '  (checking…)';
+
+      try {
+        var r    = await fetch('/api/legacy/items');
+        var data = await r.json();
+        if (data.error) { setScannedAt(idx, scannedAt); return; }
+
+        var oldSet  = new Set(CARD[idx].items);
+        var newList = buildItemsList(data.city_items || {});
+        var added   = newList.filter(function(n){ return !oldSet.has(n); });
+        var removed = Array.from(oldSet).filter(function(n){ return !newList.includes(n); });
+
+        applyData(idx, data, data.scanned_at);
+
+        if (added.length || removed.length) {
+          toast((added.length   ? '+' + added.length   + ' new item' + (added.length > 1 ? 's' : '') : '') +
+                (added.length && removed.length ? ', ' : '') +
+                (removed.length ? '−' + removed.length + ' removed' : '') + ' since last scan');
+        } else {
+          setScannedAt(idx, data.scanned_at);
+        }
+      } catch(e) {
+        setScannedAt(idx, scannedAt);
+      }
+    }
+
+    function refreshWindowTypeChips(windowRow, idx) {
+      var included = Object.keys(CARD[idx].states).filter(function(k) {
+        return CARD[idx].states[k] === 'include';
+      });
+      var chipsWrap = windowRow.querySelector('.bw-type-chips');
+      var hint      = windowRow.querySelector('.bw-types-hint');
+      var input     = windowRow.querySelector('.bw-listing-types');
+      var selected  = [];
+      try { selected = JSON.parse(input.value || '[]'); } catch(e) {}
+
+      if (!included.length) {
+        chipsWrap.innerHTML = '';
+        hint.style.display  = 'block';
+        hint.textContent    = CARD[idx].items.length
+          ? 'No included items — mark some as ✓ in the items section above.'
+          : 'Scan items first to filter by listing type.';
+        return;
+      }
+
+      hint.style.display = 'none';
+      var newWrap = chipsWrap.cloneNode(false);
+      chipsWrap.replaceWith(newWrap);
+
+      included.forEach(function(name) {
+        var isOn = selected.indexOf(name) !== -1;
+        var chip = document.createElement('button');
+        chip.type      = 'button';
+        chip.className = 'bw-type-chip' + (isOn ? ' on' : '');
+        chip.title     = name;
+        chip.textContent = name;
+        chip.addEventListener('click', function() {
+          var sel = [];
+          try { sel = JSON.parse(input.value || '[]'); } catch(e) {}
+          var idx2 = sel.indexOf(name);
+          if (idx2 !== -1) sel.splice(idx2, 1); else sel.push(name);
+          input.value = JSON.stringify(sel);
+          chip.classList.toggle('on', sel.indexOf(name) !== -1);
+        });
+        newWrap.appendChild(chip);
+      });
+    }
+
+    function toggleWindowExpand(btn) {
+      var row     = btn.closest('.booking-window-row');
+      var adv     = row.querySelector('.bw-advanced');
+      var closing = !adv.classList.contains('hidden');
+      adv.classList.toggle('hidden', closing);
+      btn.textContent = closing ? '▾' : '▴';
+      if (!closing) {
+        var idx = parseInt(row.closest('[data-index]').dataset.index);
+        refreshWindowTypeChips(row, idx);
+      }
+    }
+
+    function renderUrls() {
+      var container = document.getElementById('lgc-urls');
+      container.innerHTML = '';
+      LGC.urls.forEach(function(u, i) {
+        var windows = (u.autobook_date_ranges || []).map(function(r) {
+          return renderWindow(
+            r.from, r.to, r.time_from || '', r.time_to || '',
+            r.listing_types || [],
+            r.buffer_before_minutes !== undefined ? r.buffer_before_minutes : 15,
+            r.buffer_after_minutes  !== undefined ? r.buffer_after_minutes  : 15
+          );
+        }).join('');
+
+        var card = document.createElement('div');
+        card.className     = 'card';
+        card.dataset.index = i;
+        card.innerHTML = [
+          '<div class="flex items-center justify-between mb-4">',
+            '<div>',
+              '<span class="text-sm font-medium" style="color:var(--text-bright)">' + esc(u.name) + '</span>',
+              '<span class="ml-2 text-xs px-2 py-0.5 rounded-full" style="background:var(--bg-input);color:var(--text-dim)">' + esc(u.mode || 'default') + '</span>',
+            '</div>',
+            '<label class="cursor-pointer flex items-center gap-2">',
+              '<span class="text-xs" style="color:var(--text-dim)">Autobook</span>',
+              '<input type="checkbox" class="url-autobook toggle-input sr-only"' + (u.autobook ? ' checked' : '') + '>',
+              '<div class="toggle-track"><div class="toggle-thumb"></div></div>',
+            '</label>',
+          '</div>',
+          '<div class="mb-3">',
+            '<div class="flex items-center justify-between mb-2">',
+              '<p class="field-label" style="margin:0">Booking Windows</p>',
+              '<button onclick="addWindow(this)" class="text-xs" style="color:#3b82f6" onmouseover="this.style.color=\'#93c5fd\'" onmouseout="this.style.color=\'#3b82f6\'">+ Add window</button>',
+            '</div>',
+            '<div class="url-windows space-y-2">' + windows + '</div>',
+            '<p class="text-xs mt-1.5" style="color:var(--text-hint)">',
+              'Only autobook tours whose date &amp; time fall inside a window. ',
+              'Expand ▾ each window to set listing types &amp; gap rules.',
+            '</p>',
+          '</div>',
+          '<hr class="divider">',
+          '<div class="flex items-center justify-between mb-1">',
+            '<p class="label-sm" style="margin:0">Items to watch</p>',
+            '<button class="load-items-btn btn-sec text-xs px-3 py-1" onclick="loadItems(' + i + ')">↻ Re-scan</button>',
+          '</div>',
+          '<p class="scan-age text-xs mb-2" style="color:var(--text-faint)"></p>',
+          '<p class="scan-note text-xs mb-3" style="color:var(--text-faint);display:none">Scanning all cities (~20s)…</p>',
+          '<div class="sum-inc mb-1"></div>',
+          '<div class="sum-exc mb-3"></div>',
+          '<div class="item-list-wrap hidden">',
+            '<div class="city-chips flex flex-wrap gap-1.5 mb-3"></div>',
+            '<div class="flex gap-2 mb-2">',
+              '<input type="search" class="item-search" style="flex:1" placeholder="Filter items…" oninput="renderItemList(' + i + ')">',
+              '<button class="sel-only-btn btn-sec text-xs px-3" onclick="toggleSelectedOnly(' + i + ', this)">Selected only</button>',
+            '</div>',
+            '<div class="item-list"></div>',
+          '</div>',
+        ].join('');
+
+        container.appendChild(card);
+        updateSummary(i);
+      });
+    }
+
+    function renderWindow(dateFrom, dateTo, timeFrom, timeTo, listingTypes, bufBefore, bufAfter) {
+      var ltJson = esc(JSON.stringify(listingTypes || []));
+      return [
+        '<div class="booking-window-row bw-row">',
+          '<div class="flex gap-2 items-center">',
+            '<input type="date" class="bw-date-from" style="flex:1" value="' + esc(dateFrom) + '">',
+            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">to</span>',
+            '<input type="date" class="bw-date-to" style="flex:1" value="' + esc(dateTo) + '">',
+            '<button type="button" class="btn-icon-expand" onclick="toggleWindowExpand(this)" title="Options">▾</button>',
+            '<button type="button" class="btn-remove" style="font-size:20px" onclick="if(confirm(\'Remove this booking window?\')) this.closest(\'.booking-window-row\').remove()">×</button>',
+          '</div>',
+          '<div class="flex gap-2 items-center">',
+            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">between</span>',
+            '<input type="time" class="bw-time-from" style="flex:1" value="' + esc(timeFrom) + '">',
+            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">–</span>',
+            '<input type="time" class="bw-time-to" style="flex:1" value="' + esc(timeTo) + '">',
+            '<span style="width:50px;flex-shrink:0"></span>',
+          '</div>',
+          '<div class="bw-advanced hidden">',
+            '<div class="mb-3">',
+              '<p class="field-label mb-1.5">',
+                'Listing types for this window ',
+                '<span style="color:var(--text-hint);font-size:11px">(blank = accept all)</span>',
+              '</p>',
+              '<div class="bw-type-chips flex flex-wrap gap-1.5 mb-1"></div>',
+              '<p class="bw-types-hint text-xs" style="color:var(--text-faint);display:none"></p>',
+              '<input type="hidden" class="bw-listing-types" value=\'' + ltJson + '\'>',
+            '</div>',
+            '<div class="flex gap-3 items-end">',
+              '<div>',
+                '<p class="field-label" style="font-size:11px">Gap before (min)</p>',
+                '<input type="number" class="bw-buf-before" min="0" step="5" value="' + esc(bufBefore) + '" style="width:80px">',
+              '</div>',
+              '<div>',
+                '<p class="field-label" style="font-size:11px">Gap after (min)</p>',
+                '<input type="number" class="bw-buf-after" min="0" step="5" value="' + esc(bufAfter) + '" style="width:80px">',
+              '</div>',
+              '<div>',
+                '<span style="font-size:11px;color:var(--text-faint)">',
+                  'Minimum free time required before/after each existing booking.',
+                '</span>',
+              '</div>',
+            '</div>',
+          '</div>',
+        '</div>',
+      ].join('');
+    }
+
+    function addWindow(btn) {
+      var today = new Date().toISOString().split('T')[0];
+      var c = btn.closest('.card').querySelector('.url-windows');
+      var d = document.createElement('div');
+      d.innerHTML = renderWindow(today, today, '09:00', '18:00', [], 15, 15);
+      c.appendChild(d.firstElementChild);
+    }
+
+    renderUrls();
+
+    if (CACHE.calendars && CACHE.city_items) {
+      LGC.urls.forEach(function(_, idx) {
+        applyData(idx, CACHE, CACHE.scanned_at);
+        autoCheck(idx, CACHE.scanned_at);
+      });
+    }
+
+    async function saveFH() {
+      var urls = [];
+      document.querySelectorAll('#lgc-urls [data-index]').forEach(function(card) {
+        var idx = parseInt(card.dataset.index);
+        var st  = CARD[idx].states, kw = [], ex = [];
+        Object.keys(st).forEach(function(k) {
+          if (st[k] === 'include') kw.push(k); else if (st[k] === 'exclude') ex.push(k);
+        });
+        var windows = [];
+        card.querySelectorAll('.booking-window-row').forEach(function(row) {
+          var lt = [];
+          try { lt = JSON.parse(row.querySelector('.bw-listing-types').value || '[]'); } catch(e) {}
+          windows.push({
+            from:                  row.querySelector('.bw-date-from').value,
+            to:                    row.querySelector('.bw-date-to').value,
+            time_from:             row.querySelector('.bw-time-from').value,
+            time_to:               row.querySelector('.bw-time-to').value,
+            listing_types:         lt,
+            buffer_before_minutes: parseInt(row.querySelector('.bw-buf-before').value) || 0,
+            buffer_after_minutes:  parseInt(row.querySelector('.bw-buf-after').value)  || 0,
+          });
+        });
+        urls.push({
+          autobook:         card.querySelector('.url-autobook').checked,
+          keywords:         kw,
+          exclude_keywords: ex,
+          date_ranges:      windows,
+        });
+      });
+      var r = await fetch('/api/legacy', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          min_interval:        parseInt(document.getElementById('lgc-min').value),
+          max_interval:        parseInt(document.getElementById('lgc-max').value),
+          screenshot_on_found: document.getElementById('lgc-screenshot').checked,
+          dwell_min:           parseInt(document.getElementById('lgc-dwell-min').value),
+          dwell_max:           parseInt(document.getElementById('lgc-dwell-max').value),
+          urls: urls,
+        }),
+      });
+      if (r.ok) toast('Legacy config saved');
+    }
+
+    // ── Crew Schedule ─────────────────────────────────────
+    var _crewSchedule = [];
+    var _showHistory  = false;
+
+    async function loadCrewSchedule() {
+      try {
+        var r = await fetch('/api/crew-schedule');
+        _crewSchedule = await r.json();
+        renderCrewSchedule();
+        updateHistoryBtn();
+      } catch(e) {
+        document.getElementById('crew-schedule-body').innerHTML =
+          '<tr><td colspan="6" style="color:#f87171;font-size:13px;padding:10px 8px">Failed to load</td></tr>';
+      }
+    }
+
+    function updateHistoryBtn() {
+      var btn = document.getElementById('history-toggle-btn');
+      if (!btn) return;
+      var today = new Date().toISOString().split('T')[0];
+      var count = _crewSchedule.filter(function(s) { return s.date < today; }).length;
+      btn.textContent = 'History' + (count ? ' (' + count + ')' : '');
+      btn.style.borderColor = _showHistory ? '#3b82f6' : '';
+      btn.style.color       = _showHistory ? '#60a5fa' : '';
+    }
+
+    function toggleHistory() {
+      _showHistory = !_showHistory;
+      updateHistoryBtn();
+      renderCrewSchedule();
+    }
+
+    function makeRow(s) {
+      var today = new Date().toISOString().split('T')[0];
+      var rowCls = s.date < today ? 'row-past' : s.date === today ? 'row-today' : '';
+      var srcBadge = s.source === 'manual'
+        ? '<span class="badge badge-warn">manual</span>'
+        : s.source === 'sync'
+        ? '<span class="badge" style="background:var(--bg-surface);color:#60a5fa">sync</span>'
+        : '<span class="badge badge-neutral">auto</span>';
+      var timeStr = (s.time_start || '?') + (s.time_end ? ' – ' + s.time_end : '');
+      return '<tr class="' + rowCls + '">' +
+        '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + esc(s.date) + '</td>' +
+        '<td style="font-size:12px;color:var(--text-muted);white-space:nowrap">' + esc(timeStr) + '</td>' +
+        '<td style="font-size:13px;color:var(--text);white-space:nowrap">' + esc(s.tour || '—') + '</td>' +
+        '<td style="font-size:12px;color:var(--text-dim);white-space:nowrap">' + esc(s.name || '—') + '</td>' +
+        '<td>' + srcBadge + '</td>' +
+        '<td style="text-align:right"><button class="btn-remove" style="font-size:18px" onclick="deleteScheduleEntry(\'' + esc(s.uuid) + '\')">×</button></td>' +
+        '</tr>';
+    }
+
+    function renderCrewSchedule() {
+      var today = new Date().toISOString().split('T')[0];
+      var tbody = document.getElementById('crew-schedule-body');
+
+      var all  = _crewSchedule.slice().sort(function(a, b) {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        return (a.time_start || '') < (b.time_start || '') ? -1 : 1;
+      });
+      var upcoming = all.filter(function(s) { return s.date >= today; });
+      var past     = all.filter(function(s) { return s.date <  today; });
+
+      if (!all.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-faint);font-size:13px;padding:12px 8px;text-align:center">No bookings tracked yet</td></tr>';
+        return;
+      }
+
+      var html = '';
+
+      if (upcoming.length) {
+        html += upcoming.map(makeRow).join('');
+      } else {
+        html += '<tr><td colspan="6" style="color:var(--text-faint);font-size:13px;padding:10px 8px;text-align:center">No upcoming bookings</td></tr>';
+      }
+
+      if (_showHistory && past.length) {
+        html += '<tr><td colspan="6" style="padding:8px 8px 4px;border-top:1px solid var(--border)">' +
+          '<span style="font-size:11px;color:var(--text-dim);font-weight:500;text-transform:uppercase;letter-spacing:.06em">Past bookings (' + past.length + ')</span>' +
+          '</td></tr>';
+        html += past.slice().reverse().map(makeRow).join('');
+      }
+
+      tbody.innerHTML = html;
+    }
+
+    async function syncCrewSchedule(btn) {
+      var orig = btn.innerHTML;
+      btn.innerHTML = '<span class="spinning">↻</span> Syncing…';
+      btn.disabled  = true;
+      try {
+        var r = await fetch('/api/crew-schedule/sync', {method:'POST'});
+        if (!r.ok) { toast('Sync failed: HTTP ' + r.status, true); return; }
+        var d = await r.json();
+        if (d.error) { toast(d.error, true); return; }
+        var parts = ['+' + d.added + ' added'];
+        if (d.already_known > 0) parts.push(d.already_known + ' known');
+        if (d.cache_skipped > 0) parts.push(d.cache_skipped + ' cached');
+        if (d.no_crew_match > 0) parts.push(d.no_crew_match + ' no-Crew');
+        parts.push(d.scanned + ' scanned');
+        toast(parts.join(' · '));
+        await loadCrewSchedule();
+      } catch(e) {
+        toast('Sync failed: ' + e.message, true);
+      } finally {
+        btn.innerHTML = orig;
+        btn.disabled  = false;
+      }
+    }
+
+    function toggleAddEntry() {
+      document.getElementById('add-entry-form').classList.toggle('hidden');
+    }
+
+    async function submitAddEntry() {
+      var f = document.getElementById('add-entry-form');
+      var entry = {
+        date:       f.querySelector('.ae-date').value,
+        time_start: f.querySelector('.ae-time-start').value,
+        time_end:   f.querySelector('.ae-time-end').value,
+        tour:       f.querySelector('.ae-tour').value,
+        name:       f.querySelector('.ae-name').value,
+      };
+      if (!entry.date || !entry.time_start) { toast('Date and start time are required', true); return; }
+      try {
+        var r = await fetch('/api/crew-schedule', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(entry),
+        });
+        var d = await r.json();
+        if (!d.ok) { toast('Add failed', true); return; }
+        toast('Added');
+        f.classList.add('hidden');
+        f.querySelectorAll('input').forEach(function(el) { el.value = ''; });
+        await loadCrewSchedule();
+      } catch(e) { toast('Failed: ' + e.message, true); }
+    }
+
+    async function deleteScheduleEntry(uuid) {
+      try {
+        var r = await fetch('/api/crew-schedule/' + encodeURIComponent(uuid), {method:'DELETE'});
+        var d = await r.json();
+        if (!d.ok) { toast('Not found', true); return; }
+        toast('Removed');
+        _crewSchedule = _crewSchedule.filter(function(s) { return s.uuid !== uuid; });
+        renderCrewSchedule();
+      } catch(e) { toast('Failed: ' + e.message, true); }
+    }
+
+    loadCrewSchedule();
+
+    // ── Toast ─────────────────────────────────────────────
+    var _tt;
+
+    function toast(msg, isErr) {
+      var el = document.getElementById('toast');
+      el.textContent      = msg;
+      el.style.background = isErr ? '#991b1b' : '#16a34a';
+      el.classList.add('show');
+      clearTimeout(_tt);
+      _tt = setTimeout(function() { el.classList.remove('show'); }, isErr ? 3500 : 2500);
+    }
+
+    // ── Bot status ─────────────────────────────────────────
+    var STATUS_STATES = {
+      running:     { color: '#4ade80', pulse: true,  label: 'Running'     },
+      chrome_only: { color: '#fbbf24', pulse: false, label: 'Bot offline' },
+      offline:     { color: '#f87171', pulse: false, label: 'Offline'     },
+      checking:    { color: '#475569', pulse: false, label: 'Checking…'   },
+    };
+    function applyStatus(key) {
+      var s   = STATUS_STATES[key] || STATUS_STATES.checking;
+      var dot = document.getElementById('status-dot');
+      var txt = document.getElementById('status-text');
+      dot.style.background = s.color;
+      dot.style.animation  = s.pulse ? 'pulse 2s infinite' : 'none';
+      txt.textContent      = s.label;
+    }
+    async function pollStatus() {
+      try {
+        var d = await (await fetch('/api/status')).json();
+        applyStatus(d.status);
+      } catch(e) { applyStatus('checking'); }
+    }
+    pollStatus();
+    setInterval(pollStatus, 10000);
+
+    // ── Theme ──────────────────────────────────────────────
+    var _themeMode = 'auto';
+    var _mql = window.matchMedia('(prefers-color-scheme: light)');
+
+    function applyThemeClass() {
+      var isLight = _themeMode === 'light' || (_themeMode === 'auto' && _mql.matches);
+      document.body.classList.toggle('light', isLight);
+    }
+
+    function setTheme(mode) {
+      _themeMode = mode;
+      localStorage.setItem('theme', mode);
+      applyThemeClass();
+      document.querySelectorAll('#theme-toggle .theme-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+    }
+
+    function initTheme() {
+      _themeMode = localStorage.getItem('theme') || 'auto';
+      applyThemeClass();
+      document.querySelectorAll('#theme-toggle .theme-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.mode === _themeMode);
+      });
+      _mql.addEventListener('change', function() {
+        if (_themeMode === 'auto') applyThemeClass();
+      });
+    }
+
+    initTheme();
+  </script>
+</body>
+</html>
