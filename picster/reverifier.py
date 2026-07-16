@@ -17,10 +17,10 @@ entries are left alone.
 import asyncio
 from datetime import date
 
-from legacy.schedule import (
+from picster.schedule import (
     load_crew_schedule, save_crew_schedule, times_overlap, SCHEDULE_BUFFER_MINUTES,
 )
-from legacy.subscribers import broadcast_alert
+from picster.subscribers import broadcast_alert
 from picster.booker import fetch_modal
 
 REVERIFY_INTERVAL_SECONDS = 1800

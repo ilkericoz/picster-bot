@@ -38,7 +38,7 @@ from dotenv import load_dotenv
 from playwright.async_api import async_playwright
 
 from telegram import send_telegram
-from legacy.subscribers import load_subscribers
+from picster.subscribers import load_subscribers
 from picster.config import load_config, config_reloader
 from picster.watcher import run_grid_watcher
 from picster.reverifier import reverify_bookings_loop

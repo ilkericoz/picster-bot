@@ -1,5 +1,4 @@
 playwright
-plyer
 python-dotenv
 requests
 flask

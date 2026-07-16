@@ -231,7 +231,6 @@
           <p class="label-sm" style="margin:0">Booked slots</p>
           <div class="flex gap-2">
             <button id="history-toggle-btn" onclick="toggleHistory()" class="btn-sec text-xs px-3 py-1">History</button>
-            <button id="crew-sync-btn" onclick="syncCrewSchedule(this)" class="btn-sec text-xs px-3 py-1">↻ Sync from dashboard</button>
             <button onclick="toggleAddEntry()" class="btn-sec text-xs px-3 py-1">+ Add manually</button>
           </div>
         </div>
@@ -836,30 +835,6 @@
       }
 
       tbody.innerHTML = html;
-    }
-
-    async function syncCrewSchedule(btn) {
-      var orig = btn.innerHTML;
-      btn.innerHTML = '<span class="spinning">↻</span> Syncing…';
-      btn.disabled  = true;
-      try {
-        var r = await fetch('/api/crew-schedule/sync', {method:'POST'});
-        if (!r.ok) { toast('Sync failed: HTTP ' + r.status, true); return; }
-        var d = await r.json();
-        if (d.error) { toast(d.error, true); return; }
-        var parts = ['+' + d.added + ' added'];
-        if (d.already_known > 0) parts.push(d.already_known + ' known');
-        if (d.cache_skipped > 0) parts.push(d.cache_skipped + ' cached');
-        if (d.no_crew_match > 0) parts.push(d.no_crew_match + ' no-Crew');
-        parts.push(d.scanned + ' scanned');
-        toast(parts.join(' · '));
-        await loadCrewSchedule();
-      } catch(e) {
-        toast('Sync failed: ' + e.message, true);
-      } finally {
-        btn.innerHTML = orig;
-        btn.disabled  = false;
-      }
     }
 
     function toggleAddEntry() {

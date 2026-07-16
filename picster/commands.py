@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 from telegram import get_telegram_updates
-from legacy.subscribers import (
+from picster.subscribers import (
     reply_telegram, reply_telegram_photo, save_subscribers,
 )
 

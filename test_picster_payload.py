@@ -212,7 +212,7 @@ async def scenario_conflict():
     print("\n--- new booking conflicts with existing slot → no claim ---")
     alerts.clear()
     booker._pending_slots.clear()
-    from legacy.schedule import save_crew_schedule
+    from picster.schedule import save_crew_schedule
     save_crew_schedule([{"uuid": "X1", "date": TOMORROW, "time_start": "18:00",
                          "time_end": "19:00", "name": "Existing", "tour": "T", "source": "picster"}])
     ctx = FakeRequestCtx()
@@ -259,7 +259,7 @@ async def scenario_watcher_loop():
     print("\n--- full watcher loop: seed month silently, claim only the NEW booking ---")
     alerts.clear()
     booker._pending_slots.clear()
-    from legacy.schedule import save_crew_schedule
+    from picster.schedule import save_crew_schedule
     save_crew_schedule([])
 
     existing = card_html("301", f"{TOMORROW}T08:00:00+00:00", f"{TOMORROW}T08:30:00+00:00")

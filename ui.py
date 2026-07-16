@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.security import check_password_hash
 
-from legacy.schedule import (
+from picster.schedule import (
     load_crew_schedule, save_crew_schedule, parse_booking_datetime,
 )
 
@@ -455,31 +455,6 @@ async def _probe_crew_async(cdp_endpoint, grid_url):
             out["crew_members_raw"] = crew_raw
 
     return out
-
-
-@app.route("/api/crew-schedule/sync", methods=["POST"])
-@require_auth
-def sync_crew_schedule():
-    cdp, grid_url = _cdp_and_url()
-    try:
-        result = asyncio.run(_sync_crew_async(cdp, grid_url))
-    except Exception as e:
-        result = {"error": str(e)}
-    return jsonify(result)
-
-
-async def _sync_crew_async(cdp_endpoint, grid_url):
-    from playwright.async_api import async_playwright
-    from legacy.syncer import sync_crew
-
-    m = re.search(r'legacy\.com/([^/]+)/', grid_url)
-    shortname = m.group(1) if m else "picster"
-
-    async with async_playwright() as pw:
-        browser = await pw.chromium.connect_over_cdp(cdp_endpoint, timeout=6000)
-        ctx  = browser.contexts[0]
-        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
-        return await sync_crew(page, shortname, days_ahead=60, max_pages=20, force=True)
 
 
 if __name__ == "__main__":

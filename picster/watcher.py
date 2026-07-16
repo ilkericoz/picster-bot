@@ -20,11 +20,11 @@ import asyncio
 import random
 from datetime import date, datetime
 
-from legacy.schedule import (
+from picster.schedule import (
     find_conflict, get_tier_delay, is_in_date_range, load_crew_schedule,
     times_overlap, SCHEDULE_BUFFER_MINUTES,
 )
-from legacy.subscribers import broadcast_alert
+from picster.subscribers import broadcast_alert
 from picster.booker import claim_booking, fetch_modal, _pending_slots
 from picster.parser import build_month_url, months_to_watch, parse_grid
 
@@ -62,7 +62,7 @@ def _sync_crew_slots(bookings, crew_name, state):
         )
         if dup:
             continue
-        from legacy.schedule import record_slot
+        from picster.schedule import record_slot
         record_slot(b["id"], b["date"], b["start"], b["end"],
                     "(synced)", b["shoot"], source="picster-sync")
         schedule = load_crew_schedule()
