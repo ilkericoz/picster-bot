@@ -7,7 +7,9 @@ picster-sourced entry in crew_schedule.json and check:
   • still exists (404 → canceled, remove + alert)
   • status still Active (else remove + alert)
   • date/time unchanged (else update + alert, re-scan for conflicts)
-  • still assigned to our crew member (else alert — someone unassigned us)
+  • still assigned to our crew member (else alert ONCE — the slot is flagged
+    `unassigned_alerted` so intentional drops don't re-alert every cycle;
+    the flag clears if the booking becomes ours again)
 
 Only entries whose source starts with "picster" are touched; Legacy-era
 entries are left alone.
@@ -82,16 +84,18 @@ async def reverify_bookings_once(state, request_ctx, base_url, crew_name):
             continue
 
         _, nd, nts, nte, assigned = result
+        updated = dict(slot)
         if not assigned:
-            unassigned.append(slot)
+            if not slot.get("unassigned_alerted"):
+                unassigned.append(slot)
+                updated["unassigned_alerted"] = True
+        else:
+            updated.pop("unassigned_alerted", None)
 
         if nd != slot.get("date") or nts != slot.get("time_start") or nte != slot.get("time_end"):
-            updated = dict(slot)
             updated.update(date=nd, time_start=nts, time_end=nte)
             changed.append((slot, nd, nts, nte))
-            new_schedule.append(updated)
-        else:
-            new_schedule.append(slot)
+        new_schedule.append(updated)
 
     save_crew_schedule(new_schedule)
 
@@ -130,7 +134,7 @@ async def reverify_bookings_once(state, request_ctx, base_url, crew_name):
             lines.append(f"  Was: {slot.get('date')} {slot.get('time_start')}–{slot.get('time_end')}")
         lines.append("")
     if unassigned:
-        lines.append("NO LONGER ASSIGNED to us (check manually):")
+        lines.append("NO LONGER ASSIGNED to us (won't repeat — ignore if intentional):")
         for slot in unassigned:
             lines.append(f"• {slot.get('name','?')} — {slot.get('tour','?')} @ "
                          f"{slot.get('date')} {slot.get('time_start')}–{slot.get('time_end')}")
