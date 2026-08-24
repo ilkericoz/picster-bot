@@ -22,6 +22,7 @@ from picster.schedule import (
 )
 from picster.subscribers import broadcast_alert
 from picster.booker import fetch_modal
+from picster.driver_health import is_driver_dead
 
 REVERIFY_INTERVAL_SECONDS = 1800
 REVERIFY_STAGGER_SECONDS = 1.0
@@ -61,7 +62,18 @@ async def reverify_bookings_once(state, request_ctx, base_url, crew_name):
 
     updates = {}
     for slot in targets:
-        updates[slot["uuid"]] = await _check_slot(request_ctx, base_url, slot, crew_name)
+        result = await _check_slot(request_ctx, base_url, slot, crew_name)
+        updates[slot["uuid"]] = result
+        if result[0] == "error" and is_driver_dead(result[1]):
+            # Same fatal driver-connection death as watcher.py — every
+            # remaining check this cycle (and every cycle after) will fail
+            # identically. Bail out now rather than grinding through the
+            # rest of the list, and signal the outer loop to restart.
+            print("[REVERIFY] Playwright driver connection lost — signaling full restart")
+            fatal_event = state.get("fatal_event")
+            if fatal_event:
+                fatal_event.set()
+            return
         await asyncio.sleep(REVERIFY_STAGGER_SECONDS)
 
     # Reload from disk so record_slot writes during the fetches are preserved.

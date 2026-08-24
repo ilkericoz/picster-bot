@@ -123,84 +123,126 @@ async def run():
     subs          = load_subscribers()
     first_connect = True
 
+    while True:                             # ── outer restart loop ──
+        try:
+            restart = await _run_one_session(
+                config, urls, cdp_endpoint, base_url, crew_name,
+                check_count, seen_ids, seeded_months, subs, first_connect,
+            )
+        except Exception as e:
+            # Covers async_playwright()'s own teardown throwing (e.g. its
+            # __aexit__ trying to cleanly stop an already-dead driver pipe)
+            # as well as anything else unexpected. Never let this loop die —
+            # that's exactly the "bot silently stops for a day" failure mode.
+            print(f"[!] Session crashed: {e}\n    Retrying in 10s...")
+            await asyncio.sleep(10)
+            continue
+
+        check_count, seen_ids, seeded_months, subs, first_connect = restart
+        await asyncio.sleep(3)
+
+
+async def _run_one_session(config, urls, cdp_endpoint, base_url, crew_name,
+                            check_count, seen_ids, seeded_months, subs, first_connect):
+    """
+    Run one Chrome/Playwright session until it dies (Chrome disconnect, or
+    the Playwright driver connection itself dying), then return the counters
+    that should carry over into the next session.
+
+    async_playwright() is created fresh on every call — a driver-level death
+    ("Connection closed while reading from the driver") kills that object
+    permanently; reconnecting to Chrome on the same instance would keep
+    failing identically. See picster/driver_health.py.
+    """
     async with async_playwright() as p:
-        while True:                         # ── reconnect loop ──
-            await ensure_browser_running(cdp_endpoint)
+        await ensure_browser_running(cdp_endpoint)
 
-            try:
-                browser = await p.chromium.connect_over_cdp(cdp_endpoint)
-            except Exception as e:
-                print(f"[!] Could not attach to Chrome: {e}\n    Retrying in 10s...")
-                await asyncio.sleep(10)
-                continue
+        try:
+            browser = await p.chromium.connect_over_cdp(cdp_endpoint)
+        except Exception as e:
+            print(f"[!] Could not attach to Chrome: {e}\n    Retrying in 10s...")
+            await asyncio.sleep(10)
+            return check_count, seen_ids, seeded_months, subs, first_connect
 
-            disconnected = asyncio.Event()
-            browser.on("disconnected", lambda: disconnected.set())
+        disconnected = asyncio.Event()
+        fatal        = asyncio.Event()   # set by watcher/reverifier on driver-death
+        browser.on("disconnected", lambda: disconnected.set())
 
-            context   = browser.contexts[0] if browser.contexts else await browser.new_context()
-            page      = await context.new_page()
-            page_lock = asyncio.Lock()
+        context   = browser.contexts[0] if browser.contexts else await browser.new_context()
+        page      = await context.new_page()
+        page_lock = asyncio.Lock()
 
-            try:
-                await page.goto(f"{base_url}/bookings/",
-                                timeout=45_000, wait_until="domcontentloaded")
-            except Exception as e:
-                print(f"[!] Could not open bookings page: {e}")
+        try:
+            await page.goto(f"{base_url}/bookings/",
+                            timeout=45_000, wait_until="domcontentloaded")
+        except Exception as e:
+            print(f"[!] Could not open bookings page: {e}")
 
-            state = {
-                "check_count":     check_count,
-                "seen_ids":        seen_ids,
-                "seeded_months":   seeded_months,
-                "last_check_time": None,
-                "next_check_in":   None,
-                "interval_min":    config["check_interval_min_seconds"],
-                "interval_max":    config["check_interval_max_seconds"],
-                "subscribers":     subs,
-                "context":         context,
-                "page":            page,
-                "page_lock":       page_lock,
-            }
+        state = {
+            "check_count":     check_count,
+            "seen_ids":        seen_ids,
+            "seeded_months":   seeded_months,
+            "last_check_time": None,
+            "last_poll_ts":    None,
+            "next_check_in":   None,
+            "interval_min":    config["check_interval_min_seconds"],
+            "interval_max":    config["check_interval_max_seconds"],
+            "subscribers":     subs,
+            "context":         context,
+            "page":            page,
+            "page_lock":       page_lock,
+            "fatal_event":     fatal,
+        }
 
-            if first_connect:
-                keywords = ", ".join(k for e in urls for k in e.get("keywords", [])) or "(any)"
-                send_telegram(
-                    f"Picster bot started (human Chrome).\n"
-                    f"Watching {', '.join(e['name'] for e in urls)} every "
-                    f"{state['interval_min']}-{state['interval_max']}s.\n"
-                    f"Keywords: {keywords}\n"
-                    f"Commands: /status, /screenshot, /fast, /normal, /interval"
-                )
-                first_connect = False
-            else:
-                send_telegram("Chrome reconnected — Picster bot resuming.")
+        if first_connect:
+            keywords = ", ".join(k for e in urls for k in e.get("keywords", [])) or "(any)"
+            send_telegram(
+                f"Picster bot started (human Chrome).\n"
+                f"Watching {', '.join(e['name'] for e in urls)} every "
+                f"{state['interval_min']}-{state['interval_max']}s.\n"
+                f"Keywords: {keywords}\n"
+                f"Commands: /status, /screenshot, /fast, /normal, /interval"
+            )
+            first_connect = False
+        else:
+            send_telegram("Reconnected — Picster bot resuming.")
 
-            request_ctx = context.request
+        request_ctx = context.request
 
-            tasks = [
-                asyncio.create_task(telegram_command_listener(state, page_lock, page, config)),
-                asyncio.create_task(config_reloader(urls)),
-                asyncio.create_task(reverify_bookings_loop(state, request_ctx, base_url, crew_name)),
-                asyncio.create_task(_heartbeat_writer(state)),
-                asyncio.create_task(_telegram_heartbeat(state)),
-            ]
-            for entry in urls:
-                tasks.append(asyncio.create_task(
-                    run_grid_watcher(request_ctx, entry, state, config)
-                ))
+        tasks = [
+            asyncio.create_task(telegram_command_listener(state, page_lock, page, config)),
+            asyncio.create_task(config_reloader(urls)),
+            asyncio.create_task(reverify_bookings_loop(state, request_ctx, base_url, crew_name)),
+            asyncio.create_task(_heartbeat_writer(state)),
+            asyncio.create_task(_telegram_heartbeat(state)),
+        ]
+        for entry in urls:
+            tasks.append(asyncio.create_task(
+                run_grid_watcher(request_ctx, entry, state, config)
+            ))
 
-            try:
-                await disconnected.wait()
-            finally:
-                # Preserve counters for the next session
-                check_count = state["check_count"]
-                subs        = state["subscribers"]
-                for t in tasks:
-                    t.cancel()
-                await asyncio.gather(*tasks, return_exceptions=True)
+        waiters = [
+            asyncio.create_task(disconnected.wait()),
+            asyncio.create_task(fatal.wait()),
+        ]
+        try:
+            await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            # Preserve counters for the next session
+            check_count = state["check_count"]
+            subs        = state["subscribers"]
+            for t in [*waiters, *tasks]:
+                t.cancel()
+            await asyncio.gather(*waiters, *tasks, return_exceptions=True)
 
+        if fatal.is_set():
+            print("[Playwright] Driver connection lost — restarting driver...")
+            send_telegram("Playwright driver connection was lost — restarting from scratch...")
+        else:
             print("[Chrome] Browser disconnected — waiting to reconnect...")
             send_telegram("Chrome disconnected — attempting to reconnect...")
-            await asyncio.sleep(3)
+
+    return check_count, seen_ids, seeded_months, subs, first_connect
 
 
 if __name__ == "__main__":

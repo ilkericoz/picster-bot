@@ -27,6 +27,7 @@ from picster.schedule import (
 from picster.subscribers import broadcast_alert
 from picster.booker import claim_booking, fetch_modal, _pending_slots
 from picster.parser import build_month_url, months_to_watch, parse_grid
+from picster.driver_health import is_driver_dead
 
 
 def _keyword_match(booking, entry):
@@ -211,9 +212,25 @@ async def run_grid_watcher(request_ctx, entry, state, config):
                 cycle_ok = False
                 consecutive_errors += 1
                 print(f"[LIVE] poll failed ({month}): {e}")
-                if consecutive_errors == 5:
+
+                if is_driver_dead(e):
+                    # The Playwright driver connection itself is gone — every
+                    # future call on this request_ctx will fail identically
+                    # forever. Retrying here is pointless; signal the outer
+                    # loop in picster_bot.py to tear down and rebuild
+                    # async_playwright() from scratch.
+                    print("[LIVE] Playwright driver connection lost — signaling full restart")
+                    fatal_event = state.get("fatal_event")
+                    if fatal_event:
+                        fatal_event.set()
+                    return
+
+                # Alert on the first failure and then every 5 after, so a
+                # sustained outage keeps nagging instead of going silent
+                # after the one alert.
+                if consecutive_errors % 5 == 0:
                     broadcast_alert(state["subscribers"],
-                                    f"Picster watcher failing repeatedly: {e}")
+                                    f"Picster watcher failing repeatedly ({consecutive_errors}x): {e}")
                 break
 
             bookings = parse_grid(html)
@@ -238,6 +255,7 @@ async def run_grid_watcher(request_ctx, entry, state, config):
             consecutive_errors = 0
             state["check_count"] = state.get("check_count", 0) + 1
             state["last_check_time"] = datetime.now().strftime("%H:%M:%S")
+            state["last_poll_ts"] = datetime.now().isoformat()
             try:
                 _sync_crew_slots(cycle_bookings, crew_name, state)
             except Exception as e:
