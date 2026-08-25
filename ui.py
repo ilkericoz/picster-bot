@@ -24,6 +24,7 @@ app = Flask(__name__)
 
 BASE             = Path(__file__).parent
 LGC_CONFIG        = BASE / "legacy_config.json"
+PICSTER_CONFIG   = BASE / "picster_config.json"  # read-only in this app — never written here, see save_lgc()
 LGC_ITEMS_CACHE   = BASE / "lgc_items_cache.json"
 BOT_HEARTBEAT    = BASE / "bot_heartbeat.json"
 BOT_MAX_AGE_SECS = 60   # heartbeat older than this → bot is considered dead
@@ -157,9 +158,14 @@ def _save_cache(data):
 @app.route("/")
 @require_auth
 def index():
+    try:
+        picster = _load(PICSTER_CONFIG)
+    except (FileNotFoundError, json.JSONDecodeError):
+        picster = {}
     return render_template(
         "index.html",
         lgc=_load(LGC_CONFIG),
+        picster=picster,
         cache=_load_cache() or {},
     )
 

@@ -86,6 +86,14 @@
     .city-chip.active { background:#172554;border-color:#3b82f6;color:#93c5fd; }
     body.light .city-chip.active { background:#eff6ff;color:#2563eb; }
 
+    /* Read-only display chip — Picster live-filters panel. No hover/cursor:
+       nothing here is editable, this is a straight view of picster_config.json. */
+    .kw-chip {
+      font-size:11px;font-weight:500;padding:3px 9px;border-radius:999px;
+      border:1px solid var(--border-input);background:var(--bg-surface);color:var(--text-muted);
+      white-space:nowrap;
+    }
+
     .item-list { max-height:320px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent; }
     .item-list::-webkit-scrollbar { width:4px; }
     .item-list::-webkit-scrollbar-thumb { background:var(--scrollbar);border-radius:4px; }
@@ -193,6 +201,32 @@
   </header>
 
   <main class="max-w-xl mx-auto px-5 py-8 space-y-4">
+
+    <!-- ══ PICSTER PANEL (read-only — this is the live bot) ══ -->
+    <div id="panel-picster">
+      <p class="text-sm font-semibold mb-4" style="color:var(--text-muted)">Picster Bot — live filters <span class="ml-2 text-xs font-normal" style="color:var(--text-faint)">picster_config.json</span></p>
+      {% for u in picster.get('urls', []) %}
+      <div class="card mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <p class="label-sm" style="margin:0">{{ u.get('name', 'entry') }}</p>
+          <span class="text-xs px-2 py-0.5 rounded-full" style="background:{{ 'var(--bg-inc)' if u.get('autobook') else 'var(--bg-neutral)' }};color:{{ 'var(--color-inc)' if u.get('autobook') else 'var(--color-neutral)' }}">
+            autobook {{ 'ON' if u.get('autobook') else 'off' }}
+          </span>
+        </div>
+        <p class="field-label mb-1">Cities</p>
+        <div class="flex flex-wrap gap-1.5 mb-3">
+          {% for c in u.get('cities', []) %}<span class="kw-chip">{{ c }}</span>{% endfor %}
+        </div>
+        <p class="field-label mb-1">Keywords ({{ u.get('keywords', [])|length }})</p>
+        <div class="flex flex-wrap gap-1.5">
+          {% for k in u.get('keywords', []) %}<span class="kw-chip">{{ k }}</span>{% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <p class="text-xs" style="color:var(--text-faint)">picster_config.json not found or has no urls.</p>
+      {% endfor %}
+      <p class="text-xs" style="color:var(--text-faint)">Read-only — edit picster_config.json directly to change these (this panel can't write to it).</p>
+    </div>
 
     <!-- ══ LEGACY PANEL ══ -->
     <div id="panel-lgc">
