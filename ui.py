@@ -24,7 +24,6 @@ app = Flask(__name__)
 
 BASE             = Path(__file__).parent
 LGC_CONFIG        = BASE / "legacy_config.json"
-PICSTER_CONFIG   = BASE / "picster_config.json"
 LGC_ITEMS_CACHE   = BASE / "lgc_items_cache.json"
 BOT_HEARTBEAT    = BASE / "bot_heartbeat.json"
 BOT_MAX_AGE_SECS = 60   # heartbeat older than this → bot is considered dead
@@ -216,22 +215,12 @@ def save_lgc():
         cfg["urls"][i]["exclude_keywords"]     = u["exclude_keywords"]
         cfg["urls"][i]["autobook_date_ranges"] = u["date_ranges"]
     _save(LGC_CONFIG, cfg)
-
-    # Mirror booking settings into the picster bot's config so one UI edit
-    # drives both bots. Intervals/dwell are NOT mirrored — the picster bot
-    # downloads full month pages per cycle, so it keeps its own gentler pace.
-    try:
-        pcfg = _load(PICSTER_CONFIG)
-        for i, u in enumerate(d.get("urls", [])):
-            if i >= len(pcfg["urls"]):
-                break
-            pcfg["urls"][i]["autobook"]             = u["autobook"]
-            pcfg["urls"][i]["keywords"]             = u["keywords"]
-            pcfg["urls"][i]["exclude_keywords"]     = u["exclude_keywords"]
-            pcfg["urls"][i]["autobook_date_ranges"] = u["date_ranges"]
-        _save(PICSTER_CONFIG, pcfg)
-    except FileNotFoundError:
-        pass
+    # NOTE: this used to also mirror autobook/keywords/exclude_keywords/
+    # autobook_date_ranges into picster_config.json ("one UI edit drives both
+    # bots"). Removed — the Legacy-dashboard bot this page configures is
+    # superseded (picster.app polling is the live bot now), and the mirror
+    # meant saving this page silently overwrote the real bot's config with
+    # this page's stale state. Edit picster_config.json directly instead.
     return jsonify(ok=True)
 
 
