@@ -18,6 +18,7 @@ run_picster_logged.bat
 bot_heartbeat.json
 lgc_items_cache.json
 crew_schedule.json
+known_listing_types.json
 
 # Logs, exports, local tooling
 *.log

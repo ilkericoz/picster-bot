@@ -10,15 +10,27 @@ and for each genuinely new booking:
     → schedule conflict → in-flight guard → tier delay) and claims it
 
 Months are seeded silently the first time they're polled, so a config change
-that adds a new month doesn't flood alerts with pre-existing bookings.
+that adds a new month doesn't flood alerts with pre-existing bookings. Seeding
+is keyed on month + cities together, so adding a city to an already-running
+entry re-seeds silently too, instead of replaying every pre-existing booking
+in the newly-added city as "new".
+
+Any listing name never seen before (regardless of whether it matches
+`keywords`) gets a one-time "new listing type" alert via
+`known_listing_types.json` — alert only, never auto-added to `keywords`, so a
+brand new picster listing (like "Landmark: Premium" showing up under
+Sampleton) can't go unnoticed the way it did before, but it also can't start
+getting auto-claimed without a human choosing to add it.
 
 The same parse also keeps crew_schedule.json in sync: any card claimed by
 our crew member that isn't in the schedule yet gets recorded (replaces the
 old Legacy crew-sync loop — zero extra requests).
 """
 import asyncio
+import json
 import random
 from datetime import date, datetime
+from pathlib import Path
 
 from picster.schedule import (
     find_conflict, get_tier_delay, is_in_date_range, load_crew_schedule,
@@ -28,6 +40,21 @@ from picster.subscribers import broadcast_alert
 from picster.booker import claim_booking, fetch_modal, _pending_slots
 from picster.parser import build_month_url, months_to_watch, parse_grid
 from picster.driver_health import is_driver_dead
+
+KNOWN_TYPES_PATH = Path(__file__).resolve().parent.parent / "known_listing_types.json"
+
+
+def _load_known_types():
+    try:
+        with open(KNOWN_TYPES_PATH, encoding="utf-8") as f:
+            return set(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return set()
+
+
+def _save_known_types(known):
+    with open(KNOWN_TYPES_PATH, "w", encoding="utf-8") as f:
+        json.dump(sorted(known), f, indent=2, ensure_ascii=False)
 
 
 def _keyword_match(booking, entry):
@@ -73,8 +100,31 @@ def _sync_crew_slots(bookings, crew_name, state):
         print(f"[SYNC] +{added} claimed booking(s) added to crew schedule")
 
 
+def _check_new_listing_type(booking, state):
+    """One-time alert the first time a listing name is ever seen — runs
+    before the keyword gate below, since that gate would otherwise drop an
+    unrecognized type completely silently. Never touches `keywords` itself;
+    purely informational so a new picster listing type can't go unnoticed."""
+    known = state["known_types"]
+    shoot_key = booking["shoot"].strip().lower()
+    if shoot_key in known:
+        return
+    known.add(shoot_key)
+    _save_known_types(known)
+    print(f"[DISCOVERY] new listing type: {booking['shoot']} ({booking['city']})")
+    broadcast_alert(
+        state["subscribers"],
+        f"🆕 New listing type seen — not in autobook keywords, alert only:\n"
+        f"{booking['shoot']} — {booking['city']}\n"
+        f"{booking['date']} {booking['start']}–{booking['end']}\n"
+        f"Add it to picster_config.json's keywords if you want it auto-claimed.",
+    )
+
+
 async def _handle_new_booking(booking, entry, state, request_ctx, base_url):
     """Alert + autobook decision for one newly appeared grid booking."""
+    _check_new_listing_type(booking, state)
+
     if not _keyword_match(booking, entry):
         return
 
@@ -188,6 +238,10 @@ async def run_grid_watcher(request_ctx, entry, state, config):
 
     seen_ids = state.setdefault("seen_ids", set())
     seeded_months = state.setdefault("seeded_months", set())
+    if "known_types" not in state:
+        state["known_types"] = _load_known_types() | {
+            k.strip().lower() for k in entry.get("keywords", [])
+        }
     consecutive_errors = 0
 
     print(f"[LIVE] grid watcher started — months: "
@@ -198,7 +252,14 @@ async def run_grid_watcher(request_ctx, entry, state, config):
         cycle_ok = True
 
         for month in months_to_watch(entry, months_ahead):
-            url = build_month_url(base_url, entry.get("cities", ["Testville"]), month)
+            cities = entry.get("cities", ["Testville"])
+            # Keyed on cities too, not just month: if the config's city list
+            # changes mid-run (e.g. a city gets added), the newly-visible
+            # bookings for an already-seeded month must be seeded silently
+            # again rather than flooding alerts for every pre-existing
+            # booking in the newly-added city.
+            seed_key = f"{month}|{','.join(sorted(cities))}"
+            url = build_month_url(base_url, cities, month)
             try:
                 resp = await request_ctx.get(url)
                 html = await resp.text()
@@ -236,10 +297,10 @@ async def run_grid_watcher(request_ctx, entry, state, config):
             bookings = parse_grid(html)
             cycle_bookings.extend(bookings)
 
-            if month not in seeded_months:
-                seeded_months.add(month)
+            if seed_key not in seeded_months:
+                seeded_months.add(seed_key)
                 seen_ids.update(b["id"] for b in bookings)
-                print(f"[LIVE] seeded {month} with {len(bookings)} existing booking(s)")
+                print(f"[LIVE] seeded {month} ({','.join(sorted(cities))}) with {len(bookings)} existing booking(s)")
                 continue
 
             for b in bookings:
