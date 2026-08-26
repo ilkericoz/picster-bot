@@ -77,6 +77,16 @@
     .tab-inactive { border-bottom:2px solid transparent;color:var(--text-dim); }
     .tab-inactive:hover { color:var(--text-muted); }
 
+    /* Removable tag chip — cities, manual keyword adds, per-window listing types */
+    .kw-chip {
+      font-size:11px;font-weight:500;padding:3px 9px;border-radius:999px;
+      border:1px solid var(--border-input);background:var(--bg-surface);color:var(--text-muted);
+      white-space:nowrap;display:inline-flex;align-items:center;gap:6px;
+    }
+    .kw-chip .btn-remove { color:var(--text-faint);background:transparent;border:none;cursor:pointer;line-height:1;padding:0; }
+    .kw-chip .btn-remove:hover { color:#f87171; }
+
+    /* Scanned-item toggle picker — ✓ include / ✕ exclude, sourced from picster.app's own grid */
     .city-chip {
       font-size:11px;font-weight:500;padding:3px 9px;border-radius:999px;cursor:pointer;
       border:1px solid var(--border-input);background:transparent;color:var(--text-dim);
@@ -85,14 +95,6 @@
     .city-chip:hover  { border-color:#3b82f6;color:#93c5fd; }
     .city-chip.active { background:#172554;border-color:#3b82f6;color:#93c5fd; }
     body.light .city-chip.active { background:#eff6ff;color:#2563eb; }
-
-    /* Read-only display chip — Picster live-filters panel. No hover/cursor:
-       nothing here is editable, this is a straight view of picster_config.json. */
-    .kw-chip {
-      font-size:11px;font-weight:500;padding:3px 9px;border-radius:999px;
-      border:1px solid var(--border-input);background:var(--bg-surface);color:var(--text-muted);
-      white-space:nowrap;
-    }
 
     .item-list { max-height:320px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--scrollbar) transparent; }
     .item-list::-webkit-scrollbar { width:4px; }
@@ -122,17 +124,10 @@
     .badge-neutral { background:var(--bg-neutral);color:var(--color-neutral); }
     .badge-warn    { background:var(--bg-warn);color:var(--color-warn); }
 
-    #toast { transition:opacity .25s,transform .25s;opacity:0;transform:translateY(6px); }
-    #toast.show { opacity:1;transform:translateY(0); }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    @keyframes spin  { to{transform:rotate(360deg)} }
-    .spinning { animation:spin .7s linear infinite;display:inline-block; }
-
     .bw-row {
       background:var(--bg-surface);border:1px solid var(--border);
       border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;
     }
-    .bw-advanced { border-top:1px solid var(--border);margin-top:8px;padding-top:8px; }
     .bw-type-chip {
       font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;cursor:pointer;
       border:1px solid var(--border-input);background:transparent;color:var(--text-dim);
@@ -147,13 +142,6 @@
       border-radius:8px;cursor:pointer;transition:border-color .12s,color .12s,background .12s;
     }
     .btn-sec:hover { border-color:#3b82f6;color:#60a5fa;background:var(--bg-hover); }
-    .btn-icon-expand {
-      flex-shrink:0;width:24px;height:24px;border-radius:5px;
-      border:1px solid var(--border-input);background:transparent;color:var(--text-dim);
-      font-size:12px;cursor:pointer;transition:border-color .12s,color .12s;
-      display:flex;align-items:center;justify-content:center;
-    }
-    .btn-icon-expand:hover { border-color:#3b82f6;color:#60a5fa; }
     .btn-remove { color:var(--text-faint);background:transparent;border:none;cursor:pointer;line-height:1;padding:0 2px;flex-shrink:0; }
     .btn-remove:hover { color:#f87171; }
 
@@ -164,6 +152,9 @@
     }
     .theme-btn.active { background:var(--bg-input);border-color:var(--border-input);color:var(--text-muted); }
     .theme-btn:hover:not(.active) { color:var(--text-muted); }
+
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .spinning { animation:spin .7s linear infinite;display:inline-block; }
 
     #crew-schedule-table { border-collapse:collapse;width:100%; }
     #crew-schedule-table th {
@@ -202,56 +193,12 @@
 
   <main class="max-w-xl mx-auto px-5 py-8 space-y-4">
 
-    <!-- ══ PICSTER PANEL (read-only — this is the live bot) ══ -->
+    <!-- ══ PICSTER PANEL — this IS the live bot's config, edits write straight to picster_config.json ══ -->
     <div id="panel-picster">
-      <p class="text-sm font-semibold mb-4" style="color:var(--text-muted)">Picster Bot — live filters <span class="ml-2 text-xs font-normal" style="color:var(--text-faint)">picster_config.json</span></p>
-      {% for u in picster.get('urls', []) %}
-      <div class="card mb-4">
-        <div class="flex items-center justify-between mb-3">
-          <p class="label-sm" style="margin:0">{{ u.get('name', 'entry') }}</p>
-          <span class="text-xs px-2 py-0.5 rounded-full" style="background:{{ 'var(--bg-inc)' if u.get('autobook') else 'var(--bg-neutral)' }};color:{{ 'var(--color-inc)' if u.get('autobook') else 'var(--color-neutral)' }}">
-            autobook {{ 'ON' if u.get('autobook') else 'off' }}
-          </span>
-        </div>
-        <p class="field-label mb-1">Cities</p>
-        <div class="flex flex-wrap gap-1.5 mb-3">
-          {% for c in u.get('cities', []) %}<span class="kw-chip">{{ c }}</span>{% endfor %}
-        </div>
-        <p class="field-label mb-1">Keywords ({{ u.get('keywords', [])|length }})</p>
-        <div class="flex flex-wrap gap-1.5">
-          {% for k in u.get('keywords', []) %}<span class="kw-chip">{{ k }}</span>{% endfor %}
-        </div>
-      </div>
-      {% else %}
-      <p class="text-xs" style="color:var(--text-faint)">picster_config.json not found or has no urls.</p>
-      {% endfor %}
-      <p class="text-xs" style="color:var(--text-faint)">Read-only — edit picster_config.json directly to change these (this panel can't write to it).</p>
-    </div>
-
-    <!-- ══ LEGACY PANEL ══ -->
-    <div id="panel-lgc">
-      <p class="text-sm font-semibold mb-4" style="color:var(--text-muted)">Legacy Bot <span class="ml-2 text-xs font-normal" style="color:var(--text-faint)">legacy_config.json</span></p>
-      <div class="card mb-4">
-        <p class="label-sm">Check Interval</p>
-        <div class="flex gap-3 items-end">
-          <div class="flex-1"><p class="field-label">Min (sec)</p><input id="lgc-min" type="number" min="1" step="1" class="w-full"></div>
-          <span style="color:var(--border-input);padding-bottom:9px">—</span>
-          <div class="flex-1"><p class="field-label">Max (sec)</p><input id="lgc-max" type="number" min="1" step="1" class="w-full"></div>
-        </div>
-      </div>
-      <div class="card mb-4">
-        <p class="label-sm">Options</p>
-        <div class="flex items-center justify-between py-1 mb-3">
-          <div><p class="text-sm" style="color:var(--text-bright)">Screenshot on Found</p><p class="text-xs" style="color:var(--text-faint)">Capture when booking detected</p></div>
-          <label class="cursor-pointer"><input type="checkbox" id="lgc-screenshot" class="toggle-input sr-only"><div class="toggle-track"><div class="toggle-thumb"></div></div></label>
-        </div>
-        <div class="flex gap-3">
-          <div class="flex-1"><p class="field-label">Human Dwell Min (sec)</p><input id="lgc-dwell-min" type="number" min="0" step="1" class="w-full"></div>
-          <div class="flex-1"><p class="field-label">Human Dwell Max (sec)</p><input id="lgc-dwell-max" type="number" min="0" step="1" class="w-full"></div>
-        </div>
-      </div>
-      <div id="lgc-urls" class="space-y-4 mb-5"></div>
-      <button onclick="saveFH()" class="w-full py-2.5 rounded-xl text-sm font-medium text-white" style="background:#2563eb" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#2563eb'">Save Changes</button>
+      <p class="text-sm font-semibold mb-4" style="color:var(--text-muted)">Picster Bot <span class="ml-2 text-xs font-normal" style="color:var(--text-faint)">picster_config.json</span></p>
+      <div id="picster-urls" class="space-y-4 mb-4"></div>
+      <button onclick="savePicster()" class="w-full py-2.5 rounded-xl text-sm font-medium text-white" style="background:#2563eb" onmouseover="this.style.background='#3b82f6'" onmouseout="this.style.background='#2563eb'">Save Changes</button>
+      <p class="text-xs mt-2" style="color:var(--text-faint)">Saves directly to picster_config.json — the running bot hot-reloads it within ~10s, no restart needed.</p>
     </div>
 
     <!-- ══ CREW SCHEDULE PANEL ══ -->
@@ -312,36 +259,191 @@
   <div id="toast" class="fixed bottom-6 right-6 text-sm font-medium px-4 py-2.5 rounded-xl shadow-xl pointer-events-none" style="background:#16a34a;color:white">Saved</div>
 
   <script>
-    const LGC    = {{ lgc    | tojson }};
-    const CACHE = {{ cache | tojson }};
-
-    const AUTO_CHECK_HOURS = 6;
-
-    const CARD = LGC.urls.map(function(u) {
-      var states = {};
-      (u.keywords        || []).forEach(function(k) { states[k] = 'include'; });
-      (u.exclude_keywords|| []).forEach(function(k) { states[k] = 'exclude'; });
-      return { items: [], cityItems: {}, calendars: [], states: states, city: 'All', selectedOnly: false };
-    });
-
-    document.getElementById('lgc-min').value       = LGC.check_interval_min_seconds;
-    document.getElementById('lgc-max').value       = LGC.check_interval_max_seconds;
-    document.getElementById('lgc-screenshot').checked = !!LGC.screenshot_on_found;
-    document.getElementById('lgc-dwell-min').value = LGC.human_dwell_min_seconds;
-    document.getElementById('lgc-dwell-max').value = LGC.human_dwell_max_seconds;
+    const PICSTER = {{ picster | tojson }};
+    const CACHE   = {{ cache | tojson }};
 
     function esc(s) {
       return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
-    function getCard(idx) { return document.querySelector('#lgc-urls [data-index="' + idx + '"]'); }
 
-    function formatAge(iso) {
-      if (!iso) return '';
-      var s = (Date.now() - new Date(iso).getTime()) / 1000;
-      if (s < 60)    return 'just now';
-      if (s < 3600)  return Math.floor(s / 60)   + ' min ago';
-      if (s < 86400) return Math.floor(s / 3600)  + ' hr ago';
-      return Math.floor(s / 86400) + 'd ago';
+    // ── Generic removable-tag-list editor, state lives in a hidden JSON input ──
+    function getTags(input) { try { return JSON.parse(input.value || '[]'); } catch(e) { return []; } }
+    function setTags(input, arr) { input.value = JSON.stringify(arr); }
+
+    function tagChipsHtml(arr) {
+      if (!arr.length) return '<span style="font-size:11px;color:var(--text-faint)">none — accepts all</span>';
+      return arr.map(function(v, i) {
+        return '<span class="kw-chip">' + esc(v) +
+               '<button type="button" class="btn-remove" data-tag-idx="' + i + '" title="Remove">×</button></span>';
+      }).join('');
+    }
+
+    function wireTagField(scope, hiddenSel, wrapSel, inputSel) {
+      var hidden = scope.querySelector(hiddenSel);
+      var wrap   = scope.querySelector(wrapSel);
+      var input  = scope.querySelector(inputSel);
+
+      function render() { wrap.innerHTML = tagChipsHtml(getTags(hidden)); }
+      render();
+
+      wrap.addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-remove');
+        if (!btn) return;
+        var arr = getTags(hidden);
+        arr.splice(parseInt(btn.dataset.tagIdx, 10), 1);
+        setTags(hidden, arr);
+        render();
+      });
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var v = input.value.trim();
+        if (!v) return;
+        var arr = getTags(hidden);
+        if (arr.indexOf(v) === -1) { arr.push(v); setTags(hidden, arr); render(); }
+        input.value = '';
+      });
+    }
+
+    // ── Autobook window rows ──
+    function windowRowHtml(r) {
+      r = r || {};
+      var lt = JSON.stringify(r.listing_types || []);
+      return [
+        '<div class="bw-row">',
+          '<div class="flex gap-2 items-center">',
+            '<input type="date" class="bw-date-from" style="flex:1" value="' + esc(r.from || '') + '">',
+            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">to</span>',
+            '<input type="date" class="bw-date-to" style="flex:1" value="' + esc(r.to || '') + '">',
+            '<button type="button" class="btn-remove" style="font-size:20px" onclick="if(confirm(\'Remove this window?\')) this.closest(\'.bw-row\').remove()">×</button>',
+          '</div>',
+          '<div class="flex gap-2 items-center">',
+            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">between</span>',
+            '<input type="time" class="bw-time-from" style="flex:1" value="' + esc(r.time_from || '') + '">',
+            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">–</span>',
+            '<input type="time" class="bw-time-to" style="flex:1" value="' + esc(r.time_to || '') + '">',
+          '</div>',
+          '<div>',
+            '<p class="field-label mb-1" style="margin-top:2px">Listing types for this window <span style="color:var(--text-hint);font-size:11px">(blank = accept all included keywords)</span></p>',
+            '<div class="bw-type-chips flex flex-wrap gap-1.5 mb-1"></div>',
+            '<p class="bw-types-hint text-xs" style="color:var(--text-faint);display:none"></p>',
+            '<input type="hidden" class="bw-listing-types" value=\'' + esc(lt) + '\'>',
+          '</div>',
+          '<div class="flex gap-3 items-end">',
+            '<div><p class="field-label" style="font-size:11px">Gap before (min)</p><input type="number" class="bw-buf-before" min="0" step="5" value="' + esc(r.buffer_before_minutes !== undefined ? r.buffer_before_minutes : 15) + '" style="width:80px"></div>',
+            '<div><p class="field-label" style="font-size:11px">Gap after (min)</p><input type="number" class="bw-buf-after" min="0" step="5" value="' + esc(r.buffer_after_minutes !== undefined ? r.buffer_after_minutes : 15) + '" style="width:80px"></div>',
+          '</div>',
+        '</div>',
+      ].join('');
+    }
+
+    function addWindowRow(container, r, cardIdx) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = windowRowHtml(r);
+      var row = tmp.firstElementChild;
+      container.appendChild(row);
+      refreshWindowTypeChips(row, cardIdx);
+    }
+
+    // ── One card per picster_config.json url entry ──
+    function renderPicsterUrls() {
+      var container = document.getElementById('picster-urls');
+      container.innerHTML = '';
+      (PICSTER.urls || []).forEach(function(u) {
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.dataset.index = PICSTER_CARDS.length;
+        card.innerHTML = [
+          '<div class="flex items-center justify-between mb-3">',
+            '<div>',
+              '<span class="text-sm font-medium" style="color:var(--text-bright)">' + esc(u.name || 'entry') + '</span>',
+              '<span class="ml-2 text-xs px-2 py-0.5 rounded-full" style="background:var(--bg-input);color:var(--text-dim)">' + esc(u.mode || 'default') + '</span>',
+            '</div>',
+            '<label class="cursor-pointer flex items-center gap-2">',
+              '<span class="text-xs" style="color:var(--text-dim)">Autobook</span>',
+              '<input type="checkbox" class="pk-autobook toggle-input sr-only"' + (u.autobook ? ' checked' : '') + '>',
+              '<div class="toggle-track"><div class="toggle-thumb"></div></div>',
+            '</label>',
+          '</div>',
+          '<p class="field-label mb-1">Cities</p>',
+          '<div class="flex flex-wrap gap-1.5 mb-1 pk-cities-wrap"></div>',
+          '<input type="text" class="pk-cities-add w-full mb-3" placeholder="Add city, press Enter">',
+          '<input type="hidden" class="pk-cities" value=\'' + esc(JSON.stringify(u.cities || [])) + '\'>',
+          '<hr class="divider">',
+          '<div class="flex items-center justify-between mb-1">',
+            '<p class="label-sm" style="margin:0">Items to watch</p>',
+            '<button class="load-items-btn btn-sec text-xs px-3 py-1" onclick="loadItems(' + '__IDX__' + ')">↻ Scan items</button>',
+          '</div>',
+          '<p class="scan-age text-xs mb-2" style="color:var(--text-faint)"></p>',
+          '<p class="scan-note text-xs mb-3" style="color:var(--text-faint);display:none">Scanning picster.app\'s own grid, next 6 months (~10s)…</p>',
+          '<div class="sum-inc mb-1"></div>',
+          '<div class="sum-exc mb-3"></div>',
+          '<div class="item-list-wrap hidden">',
+            '<div class="city-chips flex flex-wrap gap-1.5 mb-3"></div>',
+            '<div class="flex gap-2 mb-2">',
+              '<input type="search" class="item-search" style="flex:1" placeholder="Filter items…">',
+              '<button class="sel-only-btn btn-sec text-xs px-3" onclick="toggleSelectedOnly(' + '__IDX__' + ', this)">Selected only</button>',
+            '</div>',
+            '<div class="item-list"></div>',
+          '</div>',
+          '<p class="text-xs mt-2 mb-1" style="color:var(--text-faint)">✓ include · ✕ exclude. Not seeing something? Add it directly:</p>',
+          '<div class="flex gap-2 mb-1"><input type="text" class="pk-keywords-add w-full" placeholder="Add keyword to include, press Enter"></div>',
+          '<div class="flex gap-2"><input type="text" class="pk-exclude-add w-full" placeholder="Add keyword to exclude, press Enter"></div>',
+          '<hr class="divider">',
+          '<div class="flex items-center justify-between mb-2">',
+            '<p class="field-label" style="margin:0">Autobook Windows</p>',
+            '<button type="button" class="pk-add-window text-xs" style="color:#3b82f6">+ Add window</button>',
+          '</div>',
+          '<div class="pk-windows space-y-2"></div>',
+        ].join('').split('__IDX__').join(String(PICSTER_CARDS.length));
+        container.appendChild(card);
+
+        var states = {};
+        (u.keywords || []).forEach(function(k) { states[k] = 'include'; });
+        (u.exclude_keywords || []).forEach(function(k) { states[k] = 'exclude'; });
+        PICSTER_CARDS.push({ items: [], cityItems: {}, calendars: [], states: states, city: 'All', selectedOnly: false });
+
+        wireTagField(card, '.pk-cities', '.pk-cities-wrap', '.pk-cities-add');
+
+        var cardIdx = PICSTER_CARDS.length - 1;
+        updateSummary(cardIdx);
+        wireManualKeywordAdd(card, cardIdx, '.pk-keywords-add', 'include');
+        wireManualKeywordAdd(card, cardIdx, '.pk-exclude-add', 'exclude');
+
+        var windowsWrap = card.querySelector('.pk-windows');
+        (u.autobook_date_ranges || []).forEach(function(r) { addWindowRow(windowsWrap, r, cardIdx); });
+        card.querySelector('.pk-add-window').addEventListener('click', function() {
+          addWindowRow(windowsWrap, { time_from: '07:00', time_to: '21:00', listing_types: [], buffer_before_minutes: 15, buffer_after_minutes: 15 }, cardIdx);
+        });
+      });
+
+      if (CACHE.calendars && CACHE.city_items) {
+        PICSTER_CARDS.forEach(function(_, idx) {
+          applyData(idx, CACHE, CACHE.scanned_at);
+          autoCheck(idx, CACHE.scanned_at);
+        });
+      }
+    }
+
+    var PICSTER_CARDS = [];
+    renderPicsterUrls();
+
+    function getCard(idx) { return document.querySelector('#picster-urls [data-index="' + idx + '"]'); }
+
+    function wireManualKeywordAdd(card, idx, sel, kind) {
+      var input = card.querySelector(sel);
+      input.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var v = input.value.trim();
+        if (!v) return;
+        PICSTER_CARDS[idx].states[v] = kind;
+        input.value = '';
+        updateSummary(idx);
+        renderItemList(idx);
+        refreshAllWindowTypeChips(idx);
+      });
     }
 
     function buildItemsList(cityItems) {
@@ -357,24 +459,13 @@
       return first.concat(extra);
     }
 
-    function applyData(idx, data, scannedAt) {
-      CARD[idx].calendars = data.calendars || [];
-      CARD[idx].cityItems = data.city_items || {};
-      CARD[idx].items     = buildItemsList(data.city_items || {});
-
-      var card = getCard(idx);
-      card.querySelector('.item-list-wrap').classList.remove('hidden');
-      card.querySelector('.item-search').value = '';
-      renderCityChips(idx);
-      renderItemList(idx);
-      setScannedAt(idx, scannedAt);
-
-      card.querySelectorAll('.booking-window-row').forEach(function(row) {
-        var adv = row.querySelector('.bw-advanced');
-        if (adv && !adv.classList.contains('hidden')) {
-          refreshWindowTypeChips(row, idx);
-        }
-      });
+    function formatAge(iso) {
+      if (!iso) return '';
+      var s = (Date.now() - new Date(iso).getTime()) / 1000;
+      if (s < 60)    return 'just now';
+      if (s < 3600)  return Math.floor(s / 60)   + ' min ago';
+      if (s < 86400) return Math.floor(s / 3600)  + ' hr ago';
+      return Math.floor(s / 86400) + 'd ago';
     }
 
     function setScannedAt(idx, iso) {
@@ -385,7 +476,7 @@
     }
 
     function updateSummary(idx) {
-      var st = CARD[idx].states, inc = [], exc = [];
+      var st = PICSTER_CARDS[idx].states, inc = [], exc = [];
       Object.keys(st).forEach(function(k) {
         if (st[k] === 'include') inc.push(k); else if (st[k] === 'exclude') exc.push(k);
       });
@@ -399,16 +490,16 @@
     }
 
     function visibleItems(idx) {
-      var c = CARD[idx], city = c.city;
+      var c = PICSTER_CARDS[idx], city = c.city;
       if (city === 'All' || !c.cityItems[city] || !c.cityItems[city].length) return c.items;
       return c.cityItems[city];
     }
 
     function toggleSelectedOnly(idx, btn) {
-      CARD[idx].selectedOnly = !CARD[idx].selectedOnly;
-      btn.style.borderColor = CARD[idx].selectedOnly ? '#3b82f6' : '';
-      btn.style.color       = CARD[idx].selectedOnly ? '#60a5fa' : '';
-      btn.style.background  = CARD[idx].selectedOnly ? '#172554' : '';
+      PICSTER_CARDS[idx].selectedOnly = !PICSTER_CARDS[idx].selectedOnly;
+      btn.style.borderColor = PICSTER_CARDS[idx].selectedOnly ? '#3b82f6' : '';
+      btn.style.color       = PICSTER_CARDS[idx].selectedOnly ? '#60a5fa' : '';
+      btn.style.background  = PICSTER_CARDS[idx].selectedOnly ? '#172554' : '';
       renderItemList(idx);
     }
 
@@ -416,9 +507,9 @@
       var card   = getCard(idx);
       var search = (card.querySelector('.item-search').value || '').toLowerCase();
       var pool   = visibleItems(idx);
-      var st     = CARD[idx].states;
+      var st     = PICSTER_CARDS[idx].states;
       var vis    = pool.filter(function(n) {
-        if (CARD[idx].selectedOnly && !st[n]) return false;
+        if (PICSTER_CARDS[idx].selectedOnly && !st[n]) return false;
         return !search || n.toLowerCase().indexOf(search) !== -1;
       });
 
@@ -427,7 +518,7 @@
       oldList.replaceWith(list);
 
       if (!vis.length) {
-        var emptyMsg = search ? 'No matches.' : CARD[idx].selectedOnly ? 'Nothing selected yet.' : 'No items loaded.';
+        var emptyMsg = search ? 'No matches.' : PICSTER_CARDS[idx].selectedOnly ? 'Nothing selected yet.' : 'No items loaded — scan first.';
         list.innerHTML = '<div style="color:var(--text-faint);font-size:13px;padding:12px 6px">' + emptyMsg + '</div>';
         updateSummary(idx);
         return;
@@ -451,19 +542,14 @@
         var row  = btn.closest('.item-row');
         var name = row.dataset.name;
         var act  = btn.classList.contains('inc-btn') ? 'include' : 'exclude';
-        if (CARD[idx].states[name] === act) delete CARD[idx].states[name];
-        else CARD[idx].states[name] = act;
-        var s2 = CARD[idx].states[name] || '';
+        if (PICSTER_CARDS[idx].states[name] === act) delete PICSTER_CARDS[idx].states[name];
+        else PICSTER_CARDS[idx].states[name] = act;
+        var s2 = PICSTER_CARDS[idx].states[name] || '';
         row.className = 'item-row' + (s2 === 'include' ? ' is-include' : s2 === 'exclude' ? ' is-exclude' : '');
         row.querySelector('.inc-btn').className = 'state-btn inc-btn' + (s2 === 'include' ? ' on' : '');
         row.querySelector('.exc-btn').className = 'state-btn exc-btn' + (s2 === 'exclude' ? ' on' : '');
-        row.querySelector('.item-name').style.color = '';
         updateSummary(idx);
-        btn.closest('[data-index]').querySelectorAll('.booking-window-row').forEach(function(wr) {
-          if (!wr.querySelector('.bw-advanced').classList.contains('hidden')) {
-            refreshWindowTypeChips(wr, idx);
-          }
-        });
+        refreshAllWindowTypeChips(idx);
       });
 
       updateSummary(idx);
@@ -475,22 +561,36 @@
       var wrap    = oldWrap.cloneNode(false);
       oldWrap.replaceWith(wrap);
 
-      var cities = ['All'].concat(CARD[idx].calendars);
+      var cities = ['All'].concat(PICSTER_CARDS[idx].calendars);
       wrap.innerHTML = cities.map(function(c) {
-        return '<button class="city-chip' + (CARD[idx].city === c ? ' active' : '') +
+        return '<button class="city-chip' + (PICSTER_CARDS[idx].city === c ? ' active' : '') +
                '" data-city="' + esc(c) + '">' + esc(c) + '</button>';
       }).join('');
 
       wrap.addEventListener('click', function(e) {
         var chip = e.target.closest('.city-chip');
         if (!chip) return;
-        CARD[idx].city = chip.dataset.city;
+        PICSTER_CARDS[idx].city = chip.dataset.city;
         wrap.querySelectorAll('.city-chip').forEach(function(b) {
-          b.classList.toggle('active', b.dataset.city === CARD[idx].city);
+          b.classList.toggle('active', b.dataset.city === PICSTER_CARDS[idx].city);
         });
         card.querySelector('.item-search').value = '';
         renderItemList(idx);
       });
+    }
+
+    function applyData(idx, data, scannedAt) {
+      PICSTER_CARDS[idx].calendars = data.calendars || [];
+      PICSTER_CARDS[idx].cityItems = data.city_items || {};
+      PICSTER_CARDS[idx].items     = buildItemsList(data.city_items || {});
+
+      var card = getCard(idx);
+      card.querySelector('.item-list-wrap').classList.remove('hidden');
+      card.querySelector('.item-search').value = '';
+      renderCityChips(idx);
+      renderItemList(idx);
+      setScannedAt(idx, scannedAt);
+      refreshAllWindowTypeChips(idx);
     }
 
     async function loadItems(idx) {
@@ -501,25 +601,12 @@
       btn.disabled  = true;
       card.querySelector('.scan-note').style.display = 'block';
 
-      var prevItems = new Set(CARD[idx].items);
       try {
-        var r    = await fetch('/api/legacy/items');
+        var r    = await fetch('/api/picster/items');
         var data = await r.json();
         if (data.error) { toast(data.error, true); return; }
-
-        var newItems = buildItemsList(data.city_items || {});
-        var added    = newItems.filter(function(n){ return !prevItems.has(n); });
-        var removed  = Array.from(prevItems).filter(function(n){ return !newItems.includes(n); });
-
         applyData(idx, data, data.scanned_at);
-
-        if (added.length || removed.length) {
-          toast((added.length   ? '+' + added.length   + ' new' : '') +
-                (added.length && removed.length ? ', ' : '') +
-                (removed.length ? '−' + removed.length + ' removed' : '') + ' items');
-        } else {
-          toast('No changes — ' + newItems.length + ' items');
-        }
+        toast('Scanned — ' + buildItemsList(data.city_items || {}).length + ' items found on picster.app');
       } catch(e) {
         toast('Failed: ' + e.message, true);
       } finally {
@@ -529,54 +616,32 @@
       }
     }
 
+    var AUTO_CHECK_HOURS = 24;
     async function autoCheck(idx, scannedAt) {
       var ageHours = (Date.now() - new Date(scannedAt).getTime()) / 3_600_000;
       if (ageHours < AUTO_CHECK_HOURS) return;
-
-      console.log('[UI] Cache is ' + ageHours.toFixed(1) + 'h old — auto-checking…');
-      var card = getCard(idx);
-      card.querySelector('.scan-age').textContent += '  (checking…)';
-
       try {
-        var r    = await fetch('/api/legacy/items');
+        var r    = await fetch('/api/picster/items');
         var data = await r.json();
-        if (data.error) { setScannedAt(idx, scannedAt); return; }
-
-        var oldSet  = new Set(CARD[idx].items);
-        var newList = buildItemsList(data.city_items || {});
-        var added   = newList.filter(function(n){ return !oldSet.has(n); });
-        var removed = Array.from(oldSet).filter(function(n){ return !newList.includes(n); });
-
+        if (data.error) return;
         applyData(idx, data, data.scanned_at);
-
-        if (added.length || removed.length) {
-          toast((added.length   ? '+' + added.length   + ' new item' + (added.length > 1 ? 's' : '') : '') +
-                (added.length && removed.length ? ', ' : '') +
-                (removed.length ? '−' + removed.length + ' removed' : '') + ' since last scan');
-        } else {
-          setScannedAt(idx, data.scanned_at);
-        }
-      } catch(e) {
-        setScannedAt(idx, scannedAt);
-      }
+      } catch(e) { /* stale cache stays visible */ }
     }
 
+    // ── Autobook-window listing-type chips: pick from currently-included keywords ──
     function refreshWindowTypeChips(windowRow, idx) {
-      var included = Object.keys(CARD[idx].states).filter(function(k) {
-        return CARD[idx].states[k] === 'include';
+      var included = Object.keys(PICSTER_CARDS[idx].states).filter(function(k) {
+        return PICSTER_CARDS[idx].states[k] === 'include';
       });
       var chipsWrap = windowRow.querySelector('.bw-type-chips');
       var hint      = windowRow.querySelector('.bw-types-hint');
       var input     = windowRow.querySelector('.bw-listing-types');
-      var selected  = [];
-      try { selected = JSON.parse(input.value || '[]'); } catch(e) {}
+      var selected  = getTags(input);
 
       if (!included.length) {
         chipsWrap.innerHTML = '';
         hint.style.display  = 'block';
-        hint.textContent    = CARD[idx].items.length
-          ? 'No included items — mark some as ✓ in the items section above.'
-          : 'Scan items first to filter by listing type.';
+        hint.textContent    = 'No included keywords yet — toggle ✓ on some items above, or add one manually.';
         return;
       }
 
@@ -592,198 +657,59 @@
         chip.title     = name;
         chip.textContent = name;
         chip.addEventListener('click', function() {
-          var sel = [];
-          try { sel = JSON.parse(input.value || '[]'); } catch(e) {}
-          var idx2 = sel.indexOf(name);
-          if (idx2 !== -1) sel.splice(idx2, 1); else sel.push(name);
-          input.value = JSON.stringify(sel);
+          var sel = getTags(input);
+          var i2 = sel.indexOf(name);
+          if (i2 !== -1) sel.splice(i2, 1); else sel.push(name);
+          setTags(input, sel);
           chip.classList.toggle('on', sel.indexOf(name) !== -1);
         });
         newWrap.appendChild(chip);
       });
     }
 
-    function toggleWindowExpand(btn) {
-      var row     = btn.closest('.booking-window-row');
-      var adv     = row.querySelector('.bw-advanced');
-      var closing = !adv.classList.contains('hidden');
-      adv.classList.toggle('hidden', closing);
-      btn.textContent = closing ? '▾' : '▴';
-      if (!closing) {
-        var idx = parseInt(row.closest('[data-index]').dataset.index);
-        refreshWindowTypeChips(row, idx);
-      }
+    function refreshAllWindowTypeChips(idx) {
+      var card = getCard(idx);
+      card.querySelectorAll('.bw-row').forEach(function(row) { refreshWindowTypeChips(row, idx); });
     }
 
-    function renderUrls() {
-      var container = document.getElementById('lgc-urls');
-      container.innerHTML = '';
-      LGC.urls.forEach(function(u, i) {
-        var windows = (u.autobook_date_ranges || []).map(function(r) {
-          return renderWindow(
-            r.from, r.to, r.time_from || '', r.time_to || '',
-            r.listing_types || [],
-            r.buffer_before_minutes !== undefined ? r.buffer_before_minutes : 15,
-            r.buffer_after_minutes  !== undefined ? r.buffer_after_minutes  : 15
-          );
-        }).join('');
-
-        var card = document.createElement('div');
-        card.className     = 'card';
-        card.dataset.index = i;
-        card.innerHTML = [
-          '<div class="flex items-center justify-between mb-4">',
-            '<div>',
-              '<span class="text-sm font-medium" style="color:var(--text-bright)">' + esc(u.name) + '</span>',
-              '<span class="ml-2 text-xs px-2 py-0.5 rounded-full" style="background:var(--bg-input);color:var(--text-dim)">' + esc(u.mode || 'default') + '</span>',
-            '</div>',
-            '<label class="cursor-pointer flex items-center gap-2">',
-              '<span class="text-xs" style="color:var(--text-dim)">Autobook</span>',
-              '<input type="checkbox" class="url-autobook toggle-input sr-only"' + (u.autobook ? ' checked' : '') + '>',
-              '<div class="toggle-track"><div class="toggle-thumb"></div></div>',
-            '</label>',
-          '</div>',
-          '<div class="mb-3">',
-            '<div class="flex items-center justify-between mb-2">',
-              '<p class="field-label" style="margin:0">Booking Windows</p>',
-              '<button onclick="addWindow(this)" class="text-xs" style="color:#3b82f6" onmouseover="this.style.color=\'#93c5fd\'" onmouseout="this.style.color=\'#3b82f6\'">+ Add window</button>',
-            '</div>',
-            '<div class="url-windows space-y-2">' + windows + '</div>',
-            '<p class="text-xs mt-1.5" style="color:var(--text-hint)">',
-              'Only autobook tours whose date &amp; time fall inside a window. ',
-              'Expand ▾ each window to set listing types &amp; gap rules.',
-            '</p>',
-          '</div>',
-          '<hr class="divider">',
-          '<div class="flex items-center justify-between mb-1">',
-            '<p class="label-sm" style="margin:0">Items to watch</p>',
-            '<button class="load-items-btn btn-sec text-xs px-3 py-1" onclick="loadItems(' + i + ')">↻ Re-scan</button>',
-          '</div>',
-          '<p class="scan-age text-xs mb-2" style="color:var(--text-faint)"></p>',
-          '<p class="scan-note text-xs mb-3" style="color:var(--text-faint);display:none">Scanning all cities (~20s)…</p>',
-          '<div class="sum-inc mb-1"></div>',
-          '<div class="sum-exc mb-3"></div>',
-          '<div class="item-list-wrap hidden">',
-            '<div class="city-chips flex flex-wrap gap-1.5 mb-3"></div>',
-            '<div class="flex gap-2 mb-2">',
-              '<input type="search" class="item-search" style="flex:1" placeholder="Filter items…" oninput="renderItemList(' + i + ')">',
-              '<button class="sel-only-btn btn-sec text-xs px-3" onclick="toggleSelectedOnly(' + i + ', this)">Selected only</button>',
-            '</div>',
-            '<div class="item-list"></div>',
-          '</div>',
-        ].join('');
-
-        container.appendChild(card);
-        updateSummary(i);
-      });
-    }
-
-    function renderWindow(dateFrom, dateTo, timeFrom, timeTo, listingTypes, bufBefore, bufAfter) {
-      var ltJson = esc(JSON.stringify(listingTypes || []));
-      return [
-        '<div class="booking-window-row bw-row">',
-          '<div class="flex gap-2 items-center">',
-            '<input type="date" class="bw-date-from" style="flex:1" value="' + esc(dateFrom) + '">',
-            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">to</span>',
-            '<input type="date" class="bw-date-to" style="flex:1" value="' + esc(dateTo) + '">',
-            '<button type="button" class="btn-icon-expand" onclick="toggleWindowExpand(this)" title="Options">▾</button>',
-            '<button type="button" class="btn-remove" style="font-size:20px" onclick="if(confirm(\'Remove this booking window?\')) this.closest(\'.booking-window-row\').remove()">×</button>',
-          '</div>',
-          '<div class="flex gap-2 items-center">',
-            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">between</span>',
-            '<input type="time" class="bw-time-from" style="flex:1" value="' + esc(timeFrom) + '">',
-            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">–</span>',
-            '<input type="time" class="bw-time-to" style="flex:1" value="' + esc(timeTo) + '">',
-            '<span style="width:50px;flex-shrink:0"></span>',
-          '</div>',
-          '<div class="bw-advanced hidden">',
-            '<div class="mb-3">',
-              '<p class="field-label mb-1.5">',
-                'Listing types for this window ',
-                '<span style="color:var(--text-hint);font-size:11px">(blank = accept all)</span>',
-              '</p>',
-              '<div class="bw-type-chips flex flex-wrap gap-1.5 mb-1"></div>',
-              '<p class="bw-types-hint text-xs" style="color:var(--text-faint);display:none"></p>',
-              '<input type="hidden" class="bw-listing-types" value=\'' + ltJson + '\'>',
-            '</div>',
-            '<div class="flex gap-3 items-end">',
-              '<div>',
-                '<p class="field-label" style="font-size:11px">Gap before (min)</p>',
-                '<input type="number" class="bw-buf-before" min="0" step="5" value="' + esc(bufBefore) + '" style="width:80px">',
-              '</div>',
-              '<div>',
-                '<p class="field-label" style="font-size:11px">Gap after (min)</p>',
-                '<input type="number" class="bw-buf-after" min="0" step="5" value="' + esc(bufAfter) + '" style="width:80px">',
-              '</div>',
-              '<div>',
-                '<span style="font-size:11px;color:var(--text-faint)">',
-                  'Minimum free time required before/after each existing booking.',
-                '</span>',
-              '</div>',
-            '</div>',
-          '</div>',
-        '</div>',
-      ].join('');
-    }
-
-    function addWindow(btn) {
-      var today = new Date().toISOString().split('T')[0];
-      var c = btn.closest('.card').querySelector('.url-windows');
-      var d = document.createElement('div');
-      d.innerHTML = renderWindow(today, today, '09:00', '18:00', [], 15, 15);
-      c.appendChild(d.firstElementChild);
-    }
-
-    renderUrls();
-
-    if (CACHE.calendars && CACHE.city_items) {
-      LGC.urls.forEach(function(_, idx) {
-        applyData(idx, CACHE, CACHE.scanned_at);
-        autoCheck(idx, CACHE.scanned_at);
-      });
-    }
-
-    async function saveFH() {
+    async function savePicster() {
       var urls = [];
-      document.querySelectorAll('#lgc-urls [data-index]').forEach(function(card) {
-        var idx = parseInt(card.dataset.index);
-        var st  = CARD[idx].states, kw = [], ex = [];
-        Object.keys(st).forEach(function(k) {
-          if (st[k] === 'include') kw.push(k); else if (st[k] === 'exclude') ex.push(k);
-        });
+      document.querySelectorAll('#picster-urls > .card').forEach(function(card, idx) {
         var windows = [];
-        card.querySelectorAll('.booking-window-row').forEach(function(row) {
-          var lt = [];
-          try { lt = JSON.parse(row.querySelector('.bw-listing-types').value || '[]'); } catch(e) {}
+        card.querySelectorAll('.bw-row').forEach(function(row) {
           windows.push({
             from:                  row.querySelector('.bw-date-from').value,
             to:                    row.querySelector('.bw-date-to').value,
             time_from:             row.querySelector('.bw-time-from').value,
             time_to:               row.querySelector('.bw-time-to').value,
-            listing_types:         lt,
-            buffer_before_minutes: parseInt(row.querySelector('.bw-buf-before').value) || 0,
-            buffer_after_minutes:  parseInt(row.querySelector('.bw-buf-after').value)  || 0,
+            listing_types:         getTags(row.querySelector('.bw-listing-types')),
+            buffer_before_minutes: parseInt(row.querySelector('.bw-buf-before').value, 10) || 0,
+            buffer_after_minutes:  parseInt(row.querySelector('.bw-buf-after').value, 10)  || 0,
           });
         });
+        var st = PICSTER_CARDS[idx].states, kw = [], ex = [];
+        Object.keys(st).forEach(function(k) {
+          if (st[k] === 'include') kw.push(k); else if (st[k] === 'exclude') ex.push(k);
+        });
         urls.push({
-          autobook:         card.querySelector('.url-autobook').checked,
+          autobook:         card.querySelector('.pk-autobook').checked,
+          cities:           getTags(card.querySelector('.pk-cities')),
           keywords:         kw,
           exclude_keywords: ex,
           date_ranges:      windows,
         });
       });
-      var r = await fetch('/api/legacy', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          min_interval:        parseInt(document.getElementById('lgc-min').value),
-          max_interval:        parseInt(document.getElementById('lgc-max').value),
-          screenshot_on_found: document.getElementById('lgc-screenshot').checked,
-          dwell_min:           parseInt(document.getElementById('lgc-dwell-min').value),
-          dwell_max:           parseInt(document.getElementById('lgc-dwell-max').value),
-          urls: urls,
-        }),
-      });
-      if (r.ok) toast('Legacy config saved');
+      try {
+        var r = await fetch('/api/picster', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ urls: urls }),
+        });
+        var d = await r.json();
+        if (r.ok && d.ok) toast('Picster config saved — live in ~10s');
+        else toast('Save failed: ' + (d.error || r.status), true);
+      } catch (e) {
+        toast('Save failed: ' + e.message, true);
+      }
     }
 
     // ── Crew Schedule ─────────────────────────────────────

@@ -2,11 +2,10 @@ import asyncio
 import hmac
 import json
 import os
-import re
 import socket
 import time
 import uuid as _uuid_mod
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 
@@ -17,17 +16,17 @@ from werkzeug.security import check_password_hash
 from picster.schedule import (
     load_crew_schedule, save_crew_schedule, parse_booking_datetime,
 )
+from picster.parser import build_month_url, parse_grid
 
 load_dotenv()
 
 app = Flask(__name__)
 
-BASE             = Path(__file__).parent
-LGC_CONFIG        = BASE / "legacy_config.json"
-PICSTER_CONFIG   = BASE / "picster_config.json"  # read-only in this app — never written here, see save_lgc()
-LGC_ITEMS_CACHE   = BASE / "lgc_items_cache.json"
-BOT_HEARTBEAT    = BASE / "bot_heartbeat.json"
-BOT_MAX_AGE_SECS = 60   # heartbeat older than this → bot is considered dead
+BASE               = Path(__file__).parent
+PICSTER_CONFIG     = BASE / "picster_config.json"  # the live bot's config — this app reads AND writes it
+PICSTER_ITEMS_CACHE = BASE / "picster_items_cache.json"
+BOT_HEARTBEAT      = BASE / "bot_heartbeat.json"
+BOT_MAX_AGE_SECS   = 60   # heartbeat older than this → bot is considered dead
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -137,20 +136,20 @@ def _save(path, data):
     print(f"[UI] Saved {path.name}")
 
 
-def _load_cache():
+def _load_items_cache():
     try:
-        with open(LGC_ITEMS_CACHE, encoding="utf-8") as f:
+        with open(PICSTER_ITEMS_CACHE, encoding="utf-8") as f:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return None
 
 
-def _save_cache(data):
+def _save_items_cache(data):
     data = dict(data)
     data["scanned_at"] = datetime.now().isoformat()
-    with open(LGC_ITEMS_CACHE, "w", encoding="utf-8") as f:
+    with open(PICSTER_ITEMS_CACHE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-    print(f"[UI] Cache saved ({sum(len(v) for v in data.get('city_items', {}).values())} total items)")
+    print(f"[UI] Picster item cache saved ({sum(len(v) for v in data.get('city_items', {}).values())} total items)")
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -162,19 +161,13 @@ def index():
         picster = _load(PICSTER_CONFIG)
     except (FileNotFoundError, json.JSONDecodeError):
         picster = {}
-    return render_template(
-        "index.html",
-        lgc=_load(LGC_CONFIG),
-        picster=picster,
-        cache=_load_cache() or {},
-    )
-
+    return render_template("index.html", picster=picster, cache=_load_items_cache() or {})
 
 
 @app.route("/api/status")
 @require_auth
 def get_status():
-    cfg = _load(LGC_CONFIG)
+    cfg = _load(PICSTER_CONFIG)
     cdp = cfg.get("cdp_endpoint", "http://127.0.0.1:9223").replace("localhost", "127.0.0.1")
 
     chrome_up = False
@@ -203,118 +196,75 @@ def get_status():
     return jsonify(status=status)
 
 
-@app.route("/api/legacy", methods=["POST"])
-@require_auth
-def save_lgc():
-    d = request.json
-    cfg = _load(LGC_CONFIG)
-    cfg["check_interval_min_seconds"] = int(d["min_interval"])
-    cfg["check_interval_max_seconds"] = int(d["max_interval"])
-    cfg["screenshot_on_found"]        = d["screenshot_on_found"]
-    cfg["human_dwell_min_seconds"]    = int(d["dwell_min"])
-    cfg["human_dwell_max_seconds"]    = int(d["dwell_max"])
-    for i, u in enumerate(d.get("urls", [])):
-        if i >= len(cfg["urls"]):
-            break
-        cfg["urls"][i]["autobook"]             = u["autobook"]
-        cfg["urls"][i]["keywords"]             = u["keywords"]
-        cfg["urls"][i]["exclude_keywords"]     = u["exclude_keywords"]
-        cfg["urls"][i]["autobook_date_ranges"] = u["date_ranges"]
-    _save(LGC_CONFIG, cfg)
-    # NOTE: this used to also mirror autobook/keywords/exclude_keywords/
-    # autobook_date_ranges into picster_config.json ("one UI edit drives both
-    # bots"). Removed — the Legacy-dashboard bot this page configures is
-    # superseded (picster.app polling is the live bot now), and the mirror
-    # meant saving this page silently overwrote the real bot's config with
-    # this page's stale state. Edit picster_config.json directly instead.
-    return jsonify(ok=True)
-
-
-# ---------------------------------------------------------------------------
-# Legacy item + city scan
-# ---------------------------------------------------------------------------
-
-async def _scan_async(cdp_endpoint, grid_url):
+async def _scan_picster_async(cdp_endpoint, base_url, cities, months_ahead=6):
+    """Pull real listing/tour names straight from picster.app's own bookings
+    grid — same HTTP-through-CDP call watcher.py makes for live polling, just
+    scanning further ahead. No Legacy involved."""
     from playwright.async_api import async_playwright
-
-    m = re.search(r'legacy\.com/([^/]+)/', grid_url)
-    shortname = m.group(1) if m else None
-    if not shortname:
-        return {"error": f"Cannot extract company shortname from URL: {grid_url}"}
 
     async with async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(cdp_endpoint, timeout=6000)
-        ctx  = browser.contexts[0]
-        page = await ctx.new_page()
-        try:
-            await page.goto(grid_url, wait_until="domcontentloaded", timeout=45_000)
-            await page.wait_for_selector(
-                'li.sortable[ng-repeat*="customCalendar"]',
-                state="attached", timeout=25_000,
-            )
-            await page.wait_for_timeout(500)
+        ctx = browser.contexts[0]
 
-            result = await page.evaluate("""async (sn) => {
-                const [calsResp, itemsResp] = await Promise.all([
-                    fetch(`/api/v1/orgs/${sn}/calendars/`, {credentials: 'same-origin'}),
-                    fetch(`/api/v1/orgs/${sn}/items/?selectable=yes`, {credentials: 'same-origin'}),
-                ]);
-                const cals     = (await calsResp.json()).custom_calendars || [];
-                const allItems = (await itemsResp.json()).items || [];
+        months = []
+        cur = date.today().replace(day=1)
+        for _ in range(months_ahead + 1):
+            months.append(cur.isoformat())
+            cur = (cur.replace(day=28) + timedelta(days=4)).replace(day=1)
 
-                const uriName = {};
-                for (const it of allItems) uriName[it.uri] = it.name;
+        city_items = {c: set() for c in cities}
+        for month in months:
+            url = build_month_url(base_url, cities, month)
+            resp = await ctx.request.get(url)
+            if not resp.ok:
+                continue
+            html = await resp.text()
+            for b in parse_grid(html):
+                city_items.setdefault(b["city"], set()).add(b["shoot"])
 
-                const calendars = [];
-                const cityItems = {};
-                for (const cal of cals) {
-                    calendars.push(cal.name);
-                    const itemsMap = (cal.settings && cal.settings.items) || {};
-                    cityItems[cal.name] = Object.entries(itemsMap)
-                        .filter(([, v]) => v === true)
-                        .map(([uri]) => uriName[uri])
-                        .filter(Boolean);
-                }
-                return {calendars, cityItems};
-            }""", shortname)
-
-            for name, items in result.get("city_items", result.get("cityItems", {})).items():
-                print(f"[UI] {name}: {len(items)} items")
-
-            if "cityItems" in result:
-                result["city_items"] = result.pop("cityItems")
-
-            return result
-
-        except Exception as e:
-            return {"error": str(e)}
-        finally:
-            await page.close()
+        return {
+            "calendars": cities,
+            "city_items": {c: sorted(v) for c, v in city_items.items()},
+        }
 
 
-def _cdp_and_url():
-    cfg      = _load(LGC_CONFIG)
-    cdp      = cfg.get("cdp_endpoint", "http://127.0.0.1:9223").replace("localhost", "127.0.0.1")
-    grid_url = cfg["urls"][0]["url"] if cfg.get("urls") else \
-               "https://example.invalid/bookings/grid/"
-    return cdp, grid_url
-
-
-@app.route("/api/legacy/items")
+@app.route("/api/picster/items")
 @require_auth
-def get_lgc_items():
-    cdp, grid_url = _cdp_and_url()
+def get_picster_items():
+    cfg = _load(PICSTER_CONFIG)
+    cdp = cfg.get("cdp_endpoint", "http://127.0.0.1:9223").replace("localhost", "127.0.0.1")
+    base_url = cfg.get("base_url", "https://picster.app")
+    cities = sorted({c for u in cfg.get("urls", []) for c in u.get("cities", [])}) or ["Testville"]
     try:
-        result = asyncio.run(_scan_async(cdp, grid_url))
-        if "error" not in result:
-            _save_cache(result)
-            result["scanned_at"] = datetime.now().isoformat()
+        result = asyncio.run(_scan_picster_async(cdp, base_url, cities))
+        _save_items_cache(result)
+        result["scanned_at"] = datetime.now().isoformat()
     except Exception as e:
         msg = str(e)
         if "ECONNREFUSED" in msg:
-            msg = "Chrome not reachable — start the Legacy bot first"
+            msg = "Chrome not reachable on the bot's CDP port — make sure the bot's Chrome window is open"
         result = {"error": msg}
     return jsonify(result)
+
+
+@app.route("/api/picster", methods=["POST"])
+@require_auth
+def save_picster():
+    """Writes autobook/cities/keywords/exclude_keywords/date_ranges straight into
+    picster_config.json — the file picster_bot.py's config_reloader actually
+    polls (every 10s). This is the live bot's real config, not a mirror."""
+    d = request.json
+    cfg = _load(PICSTER_CONFIG)
+    for i, u in enumerate(d.get("urls", [])):
+        if i >= len(cfg.get("urls", [])):
+            break
+        cfg["urls"][i]["autobook"]             = bool(u["autobook"])
+        cfg["urls"][i]["cities"]               = u["cities"]
+        cfg["urls"][i]["keywords"]             = u["keywords"]
+        cfg["urls"][i]["exclude_keywords"]     = u["exclude_keywords"]
+        cfg["urls"][i]["autobook_date_ranges"] = u["date_ranges"]
+    _save(PICSTER_CONFIG, cfg)
+    return jsonify(ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -355,101 +305,6 @@ def delete_crew_slot(booking_uuid):
         return jsonify(ok=False, error="Not found"), 404
     save_crew_schedule(new_sched)
     return jsonify(ok=True)
-
-
-@app.route("/api/crew-schedule/probe")
-@require_auth
-def probe_crew_schedule():
-    """Debug: dumps raw Legacy API data for the first visible booking."""
-    cdp, grid_url = _cdp_and_url()
-    try:
-        result = asyncio.run(_probe_crew_async(cdp, grid_url))
-    except Exception as e:
-        result = {"error": str(e)}
-    return jsonify(result)
-
-
-async def _probe_crew_async(cdp_endpoint, grid_url):
-    from playwright.async_api import async_playwright
-
-    m = re.search(r'legacy\.com/([^/]+)/', grid_url)
-    shortname = m.group(1) if m else "picster"
-
-    async with async_playwright() as pw:
-        browser = await pw.chromium.connect_over_cdp(cdp_endpoint, timeout=6000)
-        ctx  = browser.contexts[0]
-
-        pages_info = []
-        for p in ctx.pages:
-            try:
-                pages_info.append({"url": p.url})
-            except Exception:
-                pages_info.append({"url": "?"})
-
-        page = ctx.pages[0] if ctx.pages else await ctx.new_page()
-        current_url = page.url
-
-        bookings = await page.evaluate(r"""
-        () => Array.from(
-            document.querySelectorAll('a.booking-block[data-test-id="test-view-booking-action"]')
-        ).map(a => {
-            const href = a.getAttribute('href') || '';
-            const m = href.match(/bookings\/([0-9a-f-]{8,})\//);
-            return {uuid: m ? m[1] : '', name: (a.querySelector('h2')?.innerText||'').trim(), href};
-        }).filter(b => b.uuid)
-        """)
-
-        out = {
-            "current_url": current_url,
-            "all_pages": pages_info,
-            "booking_blocks_on_page": len(bookings),
-            "shortname": shortname,
-        }
-
-        if not bookings:
-            out["hint"] = "No booking blocks found. Make sure the Legacy dashboard is open and the recent-bookings panel is expanded."
-            return out
-
-        uuid = bookings[0]["uuid"]
-        out["sample_uuid"] = uuid
-
-        detail = await page.evaluate("""
-        async (args) => {
-            const r = await fetch('/api/v1/orgs/' + args.sn + '/bookings/' + args.uuid + '/', {
-                headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}
-            });
-            if (!r.ok) return {__http_error: r.status};
-            return await r.json();
-        }
-        """, {"sn": shortname, "uuid": uuid})
-
-        out["booking_detail"] = detail
-
-        if not isinstance(detail, dict) or "__http_error" in detail:
-            return out
-
-        booking  = detail.get("booking") or detail
-        item_id  = (booking.get("item") or {}).get("pk")
-        avail_id = (booking.get("availability") or {}).get("pk")
-        out["item_id"]  = item_id
-        out["avail_id"] = avail_id
-
-        if item_id and avail_id:
-            crew_raw = await page.evaluate("""
-            async (args) => {
-                const r = await fetch(
-                    '/api/v1/orgs/' + args.sn +
-                    '/items/' + args.itemId +
-                    '/availabilities/' + args.availId + '/crew/',
-                    {headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}}
-                );
-                if (!r.ok) return {__http_error: r.status};
-                return await r.json();
-            }
-            """, {"sn": shortname, "itemId": item_id, "availId": avail_id})
-            out["crew_members_raw"] = crew_raw
-
-    return out
 
 
 if __name__ == "__main__":

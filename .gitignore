@@ -17,8 +17,10 @@ run_picster_logged.bat
 # Runtime state files
 bot_heartbeat.json
 lgc_items_cache.json
+picster_items_cache.json
 crew_schedule.json
 known_listing_types.json
+picster_config.backup_*.json
 
 # Logs, exports, local tooling
 *.log
