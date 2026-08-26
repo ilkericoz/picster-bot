@@ -126,8 +126,11 @@
 
     .bw-row {
       background:var(--bg-surface);border:1px solid var(--border);
-      border-radius:9px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;
+      border-radius:9px;padding:8px 12px;
     }
+    .bw-body { display:flex;flex-direction:column;gap:7px;margin-top:7px; }
+    .bw-toggle-btn:hover .bw-summary { color:var(--text-bright); }
+    .bw-toggle-btn:hover .bw-chevron { color:var(--text-muted); }
     .bw-type-chip {
       font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px;cursor:pointer;
       border:1px solid var(--border-input);background:transparent;color:var(--text-dim);
@@ -306,43 +309,89 @@
       });
     }
 
-    // ── Autobook window rows ──
-    function windowRowHtml(r) {
+    function updateWindowsCount(card) {
+      var n = card.querySelectorAll('.pk-windows .bw-row').length;
+      card.querySelector('.pk-windows-label').textContent = 'Autobook Windows' + (n ? ' (' + n + ')' : '');
+    }
+
+    // ── Autobook window rows — collapsed to a one-line summary by default ──
+    function windowSummaryHtml(r) {
+      var dateStr  = esc(r.from || '?') + ' → ' + esc(r.to || '?');
+      var timeStr  = esc(r.time_from || '?') + '–' + esc(r.time_to || '?');
+      var n        = (r.listing_types || []).length;
+      var typesStr = n ? n + ' type' + (n === 1 ? '' : 's') : 'all included';
+      return dateStr + ' <span style="color:var(--text-faint)">·</span> ' + timeStr +
+             ' <span style="color:var(--text-faint)">·</span> ' + typesStr;
+    }
+
+    function windowRowHtml(r, expanded) {
       r = r || {};
       var lt = JSON.stringify(r.listing_types || []);
       return [
-        '<div class="bw-row">',
-          '<div class="flex gap-2 items-center">',
-            '<input type="date" class="bw-date-from" style="flex:1" value="' + esc(r.from || '') + '">',
-            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">to</span>',
-            '<input type="date" class="bw-date-to" style="flex:1" value="' + esc(r.to || '') + '">',
-            '<button type="button" class="btn-remove" style="font-size:20px" onclick="if(confirm(\'Remove this window?\')) this.closest(\'.bw-row\').remove()">×</button>',
+        '<div class="bw-row' + (expanded ? '' : ' collapsed') + '">',
+          '<div class="flex items-center justify-between gap-2">',
+            '<button type="button" class="bw-toggle-btn flex items-center gap-2" style="background:none;border:none;cursor:pointer;padding:2px 0;flex:1;min-width:0;text-align:left">',
+              '<span class="bw-chevron" style="color:var(--text-faint);font-size:10px;flex-shrink:0;display:inline-block;width:10px">' + (expanded ? '▾' : '▸') + '</span>',
+              '<span class="bw-summary" style="font-size:12px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + windowSummaryHtml(r) + '</span>',
+            '</button>',
+            '<button type="button" class="btn-remove" style="font-size:18px;flex-shrink:0" onclick="if(confirm(\'Remove this window?\')) { var c=this.closest(\'#picster-urls > .card\'); this.closest(\'.bw-row\').remove(); updateWindowsCount(c); }">×</button>',
           '</div>',
-          '<div class="flex gap-2 items-center">',
-            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">between</span>',
-            '<input type="time" class="bw-time-from" style="flex:1" value="' + esc(r.time_from || '') + '">',
-            '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">–</span>',
-            '<input type="time" class="bw-time-to" style="flex:1" value="' + esc(r.time_to || '') + '">',
-          '</div>',
-          '<div>',
-            '<p class="field-label mb-1" style="margin-top:2px">Listing types for this window <span style="color:var(--text-hint);font-size:11px">(blank = accept all included keywords)</span></p>',
-            '<div class="bw-type-chips flex flex-wrap gap-1.5 mb-1"></div>',
-            '<p class="bw-types-hint text-xs" style="color:var(--text-faint);display:none"></p>',
-            '<input type="hidden" class="bw-listing-types" value=\'' + esc(lt) + '\'>',
-          '</div>',
-          '<div class="flex gap-3 items-end">',
-            '<div><p class="field-label" style="font-size:11px">Gap before (min)</p><input type="number" class="bw-buf-before" min="0" step="5" value="' + esc(r.buffer_before_minutes !== undefined ? r.buffer_before_minutes : 15) + '" style="width:80px"></div>',
-            '<div><p class="field-label" style="font-size:11px">Gap after (min)</p><input type="number" class="bw-buf-after" min="0" step="5" value="' + esc(r.buffer_after_minutes !== undefined ? r.buffer_after_minutes : 15) + '" style="width:80px"></div>',
+          '<div class="bw-body' + (expanded ? '' : ' hidden') + '">',
+            '<div class="flex gap-2 items-center">',
+              '<input type="date" class="bw-date-from" style="flex:1" value="' + esc(r.from || '') + '">',
+              '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">to</span>',
+              '<input type="date" class="bw-date-to" style="flex:1" value="' + esc(r.to || '') + '">',
+            '</div>',
+            '<div class="flex gap-2 items-center">',
+              '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">between</span>',
+              '<input type="time" class="bw-time-from" style="flex:1" value="' + esc(r.time_from || '') + '">',
+              '<span style="color:var(--text-faint);font-size:11px;flex-shrink:0">–</span>',
+              '<input type="time" class="bw-time-to" style="flex:1" value="' + esc(r.time_to || '') + '">',
+            '</div>',
+            '<div>',
+              '<p class="field-label mb-1" style="margin-top:2px">Listing types for this window <span style="color:var(--text-hint);font-size:11px">(blank = accept all included keywords)</span></p>',
+              '<div class="bw-type-chips flex flex-wrap gap-1.5 mb-1"></div>',
+              '<p class="bw-types-hint text-xs" style="color:var(--text-faint);display:none"></p>',
+              '<input type="hidden" class="bw-listing-types" value=\'' + esc(lt) + '\'>',
+            '</div>',
+            '<div class="flex gap-3 items-end">',
+              '<div><p class="field-label" style="font-size:11px">Gap before (min)</p><input type="number" class="bw-buf-before" min="0" step="5" value="' + esc(r.buffer_before_minutes !== undefined ? r.buffer_before_minutes : 15) + '" style="width:80px"></div>',
+              '<div><p class="field-label" style="font-size:11px">Gap after (min)</p><input type="number" class="bw-buf-after" min="0" step="5" value="' + esc(r.buffer_after_minutes !== undefined ? r.buffer_after_minutes : 15) + '" style="width:80px"></div>',
+            '</div>',
           '</div>',
         '</div>',
       ].join('');
     }
 
-    function addWindowRow(container, r, cardIdx) {
+    function readWindowFields(row) {
+      return {
+        from:          row.querySelector('.bw-date-from').value,
+        to:            row.querySelector('.bw-date-to').value,
+        time_from:     row.querySelector('.bw-time-from').value,
+        time_to:       row.querySelector('.bw-time-to').value,
+        listing_types: getTags(row.querySelector('.bw-listing-types')),
+      };
+    }
+
+    function wireWindowToggle(row) {
+      var btn     = row.querySelector('.bw-toggle-btn');
+      var body    = row.querySelector('.bw-body');
+      var chevron = row.querySelector('.bw-chevron');
+      btn.addEventListener('click', function() {
+        var willExpand = body.classList.contains('hidden');
+        if (!willExpand) row.querySelector('.bw-summary').innerHTML = windowSummaryHtml(readWindowFields(row));
+        body.classList.toggle('hidden', !willExpand);
+        chevron.textContent = willExpand ? '▾' : '▸';
+        row.classList.toggle('collapsed', !willExpand);
+      });
+    }
+
+    function addWindowRow(container, r, cardIdx, expanded) {
       var tmp = document.createElement('div');
-      tmp.innerHTML = windowRowHtml(r);
+      tmp.innerHTML = windowRowHtml(r, !!expanded);
       var row = tmp.firstElementChild;
       container.appendChild(row);
+      wireWindowToggle(row);
       refreshWindowTypeChips(row, cardIdx);
     }
 
@@ -373,7 +422,10 @@
           '<hr class="divider">',
           '<div class="flex items-center justify-between mb-1">',
             '<p class="label-sm" style="margin:0">Items to watch</p>',
-            '<button class="load-items-btn btn-sec text-xs px-3 py-1" onclick="loadItems(' + '__IDX__' + ')">↻ Scan items</button>',
+            '<div class="flex gap-2">',
+              '<button class="toggle-items-btn btn-sec text-xs px-3 py-1" onclick="setItemsExpanded(' + '__IDX__' + ', !PICSTER_CARDS[' + '__IDX__' + '].itemsExpanded)">Show list</button>',
+              '<button class="load-items-btn btn-sec text-xs px-3 py-1" onclick="loadItems(' + '__IDX__' + ')">↻ Scan items</button>',
+            '</div>',
           '</div>',
           '<p class="scan-age text-xs mb-2" style="color:var(--text-faint)"></p>',
           '<p class="scan-note text-xs mb-3" style="color:var(--text-faint);display:none">Scanning picster.app\'s own grid, next 6 months (~10s)…</p>',
@@ -392,17 +444,17 @@
           '<div class="flex gap-2"><input type="text" class="pk-exclude-add w-full" placeholder="Add keyword to exclude, press Enter"></div>',
           '<hr class="divider">',
           '<div class="flex items-center justify-between mb-2">',
-            '<p class="field-label" style="margin:0">Autobook Windows</p>',
+            '<p class="field-label pk-windows-label" style="margin:0">Autobook Windows</p>',
             '<button type="button" class="pk-add-window text-xs" style="color:#3b82f6">+ Add window</button>',
           '</div>',
-          '<div class="pk-windows space-y-2"></div>',
+          '<div class="pk-windows space-y-1.5"></div>',
         ].join('').split('__IDX__').join(String(PICSTER_CARDS.length));
         container.appendChild(card);
 
         var states = {};
         (u.keywords || []).forEach(function(k) { states[k] = 'include'; });
         (u.exclude_keywords || []).forEach(function(k) { states[k] = 'exclude'; });
-        PICSTER_CARDS.push({ items: [], cityItems: {}, calendars: [], states: states, city: 'All', selectedOnly: false });
+        PICSTER_CARDS.push({ items: [], cityItems: {}, calendars: [], states: states, city: 'All', selectedOnly: false, itemsExpanded: false });
 
         wireTagField(card, '.pk-cities', '.pk-cities-wrap', '.pk-cities-add');
 
@@ -412,9 +464,11 @@
         wireManualKeywordAdd(card, cardIdx, '.pk-exclude-add', 'exclude');
 
         var windowsWrap = card.querySelector('.pk-windows');
-        (u.autobook_date_ranges || []).forEach(function(r) { addWindowRow(windowsWrap, r, cardIdx); });
+        (u.autobook_date_ranges || []).forEach(function(r) { addWindowRow(windowsWrap, r, cardIdx, false); });
+        updateWindowsCount(card);
         card.querySelector('.pk-add-window').addEventListener('click', function() {
-          addWindowRow(windowsWrap, { time_from: '07:00', time_to: '21:00', listing_types: [], buffer_before_minutes: 15, buffer_after_minutes: 15 }, cardIdx);
+          addWindowRow(windowsWrap, { time_from: '07:00', time_to: '21:00', listing_types: [], buffer_before_minutes: 15, buffer_after_minutes: 15 }, cardIdx, true);
+          updateWindowsCount(card);
         });
       });
 
@@ -579,17 +633,28 @@
       });
     }
 
+    function setItemsExpanded(idx, expanded) {
+      PICSTER_CARDS[idx].itemsExpanded = expanded;
+      var card    = getCard(idx);
+      var wrap    = card.querySelector('.item-list-wrap');
+      var btn     = card.querySelector('.toggle-items-btn');
+      var count   = PICSTER_CARDS[idx].items.length;
+      var hasData = count > 0;
+      wrap.classList.toggle('hidden', !expanded || !hasData);
+      if (btn) btn.textContent = expanded ? 'Hide list ▴' : 'Show list' + (hasData ? ' (' + count + ') ▾' : ' ▾');
+    }
+
     function applyData(idx, data, scannedAt) {
       PICSTER_CARDS[idx].calendars = data.calendars || [];
       PICSTER_CARDS[idx].cityItems = data.city_items || {};
       PICSTER_CARDS[idx].items     = buildItemsList(data.city_items || {});
 
       var card = getCard(idx);
-      card.querySelector('.item-list-wrap').classList.remove('hidden');
       card.querySelector('.item-search').value = '';
       renderCityChips(idx);
       renderItemList(idx);
       setScannedAt(idx, scannedAt);
+      setItemsExpanded(idx, PICSTER_CARDS[idx].itemsExpanded);
       refreshAllWindowTypeChips(idx);
     }
 
