@@ -98,6 +98,9 @@ class FakeResponse:
     async def text(self):
         return self._body
 
+    async def dispose(self):
+        pass
+
 
 class FakeRequestCtx:
     """Stands in for Playwright's APIRequestContext."""
@@ -152,7 +155,11 @@ def make_entry(**over):
 
 
 def make_state():
-    return {"subscribers": {}, "hit_count": 0, "seen_ids": set(), "seeded_months": set()}
+    # known_types mirrors what run_grid_watcher() seeds before ever calling
+    # _handle_new_booking() in production (watcher.py) — without it,
+    # _check_new_listing_type()'s state["known_types"] lookup raises KeyError.
+    return {"subscribers": {}, "hit_count": 0, "seen_ids": set(), "seeded_months": set(),
+            "known_types": set()}
 
 
 alerts = []
