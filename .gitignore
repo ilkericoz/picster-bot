@@ -27,7 +27,6 @@ picster_config.backup_*.json
 *.eml
 .claude
 
-# Local scratch — session data and legacy capture, never commit
+# Local scratch — session data, never commit
 legacy source files/
 legacy_api_capture.jsonl
-local-symlink-removed
