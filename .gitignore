@@ -6,17 +6,17 @@ __pycache__/
 !templates/*.html
 .env
 
-# Configs and subscriber state — contain chat IDs / endpoints
-legacy_config.json
-legacy_subscribers.json
+# Configs and subscriber state — contain chat IDs / endpoints, drift constantly
+# from the bot's own writes (live filters, not a code change worth diffing)
+picster_config.json
+picster_subscribers.json
 
 # Local launcher scripts — contain machine-specific paths
-launch_legacy_chrome.bat
+launch_picster_chrome.bat
 run_picster_logged.bat
 
 # Runtime state files
 bot_heartbeat.json
-lgc_items_cache.json
 picster_items_cache.json
 crew_schedule.json
 known_listing_types.json

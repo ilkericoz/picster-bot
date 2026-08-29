@@ -75,7 +75,7 @@ def require_auth(f):
             return Response(
                 "Too many failed attempts — wait 60 s",
                 429,
-                {"Retry-After": "60", "WWW-Authenticate": 'Basic realm="Legacy UI"'},
+                {"Retry-After": "60", "WWW-Authenticate": 'Basic realm="Picster UI"'},
             )
 
         auth = request.authorization
@@ -89,7 +89,7 @@ def require_auth(f):
             return Response(
                 "Unauthorized",
                 401,
-                {"WWW-Authenticate": 'Basic realm="Legacy UI"'},
+                {"WWW-Authenticate": 'Basic realm="Picster UI"'},
             )
 
         _rate_clear(ip)

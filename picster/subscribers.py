@@ -3,7 +3,7 @@ import os
 
 from telegram import send_telegram, send_telegram_photo
 
-SUBSCRIBERS_PATH = "legacy_subscribers.json"
+SUBSCRIBERS_PATH = "picster_subscribers.json"
 
 
 def load_subscribers():

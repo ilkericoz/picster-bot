@@ -21,7 +21,7 @@ playwright install chromium   # only the playwright driver is used (CDP attach)
 ```
 
 1. Copy `.env.example` to `.env` and fill in the Telegram bot token + owner chat ID.
-2. Launch Chrome with remote debugging on :9223 (`launch_legacy_chrome.bat`, machine-local) and log into picster.app.
+2. Launch Chrome with remote debugging on :9223 (`launch_picster_chrome.bat`, machine-local) and log into picster.app.
 3. Start the bot: `python picster_bot.py` (or `run_picster_logged.bat` for a console-less logged run).
 4. Optional: `python ui.py` for the web UI (`setup_auth.py` generates the login hash).
 

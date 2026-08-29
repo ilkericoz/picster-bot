@@ -7,7 +7,7 @@ reuses its logged-in picster.app session for all HTTP calls — no headless
 browser, no automation fingerprint.
 
 How it works:
-  1. Run launch_legacy_chrome.bat once and log into picster.app in that
+  1. Run launch_picster_chrome.bat once and log into picster.app in that
      Chrome (same profile/session as before).
   2. Start this bot: `python picster_bot.py`.
   3. The bot polls the bookings grid month views through the browser's
@@ -48,7 +48,7 @@ load_dotenv()
 
 HEARTBEAT_INTERVAL = 6 * 60 * 60
 HEARTBEAT_FILE     = Path(__file__).parent / "bot_heartbeat.json"
-_BAT_PATH          = Path(__file__).parent / "launch_legacy_chrome.bat"
+_BAT_PATH          = Path(__file__).parent / "launch_picster_chrome.bat"
 
 
 async def _heartbeat_writer(state):
