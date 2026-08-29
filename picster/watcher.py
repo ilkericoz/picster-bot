@@ -263,6 +263,7 @@ async def run_grid_watcher(request_ctx, entry, state, config):
             try:
                 resp = await request_ctx.get(url)
                 html = await resp.text()
+                await resp.dispose()  # body would otherwise stay in the driver's memory until context close
                 if not resp.ok:
                     raise RuntimeError(f"HTTP {resp.status}")
                 if sanity and sanity not in html.lower():
