@@ -216,9 +216,12 @@ async def _scan_picster_async(cdp_endpoint, base_url, cities, months_ahead=6):
         for month in months:
             url = build_month_url(base_url, cities, month)
             resp = await ctx.request.get(url)
-            if not resp.ok:
-                continue
-            html = await resp.text()
+            try:
+                if not resp.ok:
+                    continue
+                html = await resp.text()
+            finally:
+                await resp.dispose()  # not a real leak here (context closes per-request) — fixed for consistency
             for b in parse_grid(html):
                 city_items.setdefault(b["city"], set()).add(b["shoot"])
 

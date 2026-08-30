@@ -26,13 +26,14 @@ async def fetch_modal(request_ctx, base_url, booking_id):
     """GET the booking detail modal. Returns (status_code, parsed_info | None)."""
     url = f"{base_url.rstrip('/')}/bookings/modal/{booking_id}/"
     resp = await request_ctx.get(url, headers=_XHR_HEADERS)
-    status = resp.status
-    if not resp.ok:
-        await resp.dispose()  # body would otherwise stay in the driver's memory until context close
-        return status, None
-    text = await resp.text()
-    await resp.dispose()
-    return status, parse_modal(text)
+    try:
+        status = resp.status
+        if not resp.ok:
+            return status, None
+        text = await resp.text()
+        return status, parse_modal(text)
+    finally:
+        await resp.dispose()  # else the body stays in the driver's memory until context close, even if .text() raises
 
 
 async def claim_booking(request_ctx, base_url, booking, state):
@@ -79,8 +80,10 @@ async def claim_booking(request_ctx, base_url, booking, state):
             form=form,
             headers={**_XHR_HEADERS, "Referer": post_url},
         )
-        body = await resp.text()
-        await resp.dispose()  # body would otherwise stay in the driver's memory until context close
+        try:
+            body = await resp.text()
+        finally:
+            await resp.dispose()  # else the body stays in the driver's memory until context close, even if .text() raises
         if not resp.ok:
             raise RuntimeError(f"claim POST HTTP {resp.status}: {body[:300]}")
 
