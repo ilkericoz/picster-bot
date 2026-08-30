@@ -158,7 +158,7 @@ def make_state():
     # known_types mirrors what run_grid_watcher() seeds before ever calling
     # _handle_new_booking() in production (watcher.py) — without it,
     # _check_new_listing_type()'s state["known_types"] lookup raises KeyError.
-    return {"subscribers": {}, "hit_count": 0, "seen_ids": set(), "seeded_months": set(),
+    return {"subscribers": {}, "hit_count": 0, "seen_ids": {}, "seeded_months": set(),
             "known_types": set()}
 
 

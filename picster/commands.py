@@ -68,6 +68,7 @@ async def _cmd_screenshot(chat_id, sender_name, raw, state, page_lock, page, cfg
     reply_telegram(chat_id, "Taking screenshots...")
     async with page_lock:
         for entry in cfg["urls"]:
+            path = None
             try:
                 target = entry["url"].rstrip("/")
                 current = (page.url or "").rstrip("/").split("?")[0]
@@ -83,6 +84,13 @@ async def _cmd_screenshot(chat_id, sender_name, raw, state, page_lock, page, cfg
                 reply_telegram_photo(chat_id, path, caption=entry["name"])
             except Exception as e:
                 reply_telegram(chat_id, f"Screenshot failed ({entry['name']}): {e}")
+            finally:
+                # else these PNGs pile up on disk forever — never cleaned up otherwise
+                if path:
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
 
 
 async def _cmd_fast(chat_id, sender_name, raw, state, page_lock, page, cfg):

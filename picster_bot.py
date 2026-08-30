@@ -118,7 +118,7 @@ async def run():
 
     # Persist these across Chrome reconnects
     check_count   = 0
-    seen_ids      = set()
+    seen_ids      = {}  # {booking_id: booking date} — pruned in watcher.py
     seeded_months = set()
     subs          = load_subscribers()
     first_connect = True
@@ -169,6 +169,19 @@ async def _run_one_session(config, urls, cdp_endpoint, base_url, crew_name,
         browser.on("disconnected", lambda: disconnected.set())
 
         context   = browser.contexts[0] if browser.contexts else await browser.new_context()
+
+        # Defensive cleanup: if the previous session died via a broken driver
+        # pipe (see picster/driver_health.py), it couldn't get to page.close()
+        # on its way out, leaving a stray picster.app tab open in this same,
+        # reused Chrome context. Close any before opening today's page, or
+        # every driver restart leaks one more tab into the real browser.
+        for stray in list(context.pages):
+            if (stray.url or "").rstrip("/").startswith(base_url.rstrip("/")):
+                try:
+                    await stray.close()
+                except Exception:
+                    pass
+
         page      = await context.new_page()
         page_lock = asyncio.Lock()
 
@@ -234,6 +247,10 @@ async def _run_one_session(config, urls, cdp_endpoint, base_url, crew_name,
             for t in [*waiters, *tasks]:
                 t.cancel()
             await asyncio.gather(*waiters, *tasks, return_exceptions=True)
+            try:
+                await page.close()  # else this tab is orphaned in the real Chrome forever
+            except Exception:
+                pass
 
         if fatal.is_set():
             print("[Playwright] Driver connection lost — restarting driver...")

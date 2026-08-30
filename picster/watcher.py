@@ -29,7 +29,7 @@ old Legacy crew-sync loop — zero extra requests).
 import asyncio
 import json
 import random
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from picster.schedule import (
@@ -42,6 +42,12 @@ from picster.parser import build_month_url, months_to_watch, parse_grid
 from picster.driver_health import is_driver_dead
 
 KNOWN_TYPES_PATH = Path(__file__).resolve().parent.parent / "known_listing_types.json"
+
+# seen_ids only needs to cover bookings whose month is still in months_to_watch()
+# (which drops past months entirely — see parser.months_to_watch), so anything
+# older than a full month-cycle is safe to forget. Keeps a wide margin over the
+# ~31-day max a month can stay in view.
+SEEN_ID_STALE_DAYS = 45
 
 
 def _load_known_types():
@@ -236,7 +242,7 @@ async def run_grid_watcher(request_ctx, entry, state, config):
     months_ahead = config.get("watch_months_ahead", 2)
     sanity = config.get("sanity_phrase", "picster").lower()
 
-    seen_ids = state.setdefault("seen_ids", set())
+    seen_ids = state.setdefault("seen_ids", {})  # {booking_id: booking date} — pruned below
     seeded_months = state.setdefault("seeded_months", set())
     if "known_types" not in state:
         state["known_types"] = _load_known_types() | {
@@ -300,18 +306,28 @@ async def run_grid_watcher(request_ctx, entry, state, config):
 
             if seed_key not in seeded_months:
                 seeded_months.add(seed_key)
-                seen_ids.update(b["id"] for b in bookings)
+                seen_ids.update((b["id"], b["date"]) for b in bookings)
                 print(f"[LIVE] seeded {month} ({','.join(sorted(cities))}) with {len(bookings)} existing booking(s)")
                 continue
 
             for b in bookings:
                 if b["id"] in seen_ids:
                     continue
-                seen_ids.add(b["id"])
+                seen_ids[b["id"]] = b["date"]
                 try:
                     await _handle_new_booking(b, entry, state, request_ctx, base_url)
                 except Exception as e:
                     print(f"[LIVE] handle_new_booking failed (#{b['id']}): {e}")
+
+        # seen_ids otherwise grows for as long as the process lives (weeks/months
+        # of uptime) — every booking id ever polled, kept forever. Bookings whose
+        # date has aged out of every month we could possibly still be watching
+        # are safe to forget; the month itself will never be re-polled to
+        # resurrect them as "new" again.
+        stale_cutoff = (date.today() - timedelta(days=SEEN_ID_STALE_DAYS)).isoformat()
+        stale_ids = [bid for bid, d in seen_ids.items() if d < stale_cutoff]
+        for bid in stale_ids:
+            del seen_ids[bid]
 
         if cycle_ok:
             consecutive_errors = 0
