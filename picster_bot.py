@@ -91,7 +91,14 @@ async def ensure_browser_running(cdp_endpoint: str) -> bool:
         return False
 
     print(f"  [Chrome] Browser not detected — launching {_BAT_PATH.name}...")
-    subprocess.Popen(["cmd", "/c", str(_BAT_PATH)], creationflags=subprocess.CREATE_NEW_CONSOLE)
+    # CREATE_NO_WINDOW (not CREATE_NEW_CONSOLE): no cmd window flashes up for
+    # this — the .bat itself already detaches Chrome via `start` and exits
+    # immediately, so there's nothing useful to show here anyway.
+    subprocess.Popen(
+        ["cmd", "/c", str(_BAT_PATH)],
+        creationflags=subprocess.CREATE_NO_WINDOW,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
 
     deadline = time.time() + 30
     while time.time() < deadline:
