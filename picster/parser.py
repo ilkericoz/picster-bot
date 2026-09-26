@@ -28,6 +28,14 @@ CREW_RE = re.compile(
     r'<div class="booking-card-crew([^"]*)"[^>]*>\s*(.*?)\s*</div>', re.S
 )
 
+# The City: filter widget (data-ms="cities") lists every city the account can
+# see, regardless of which cities the current grid request itself filtered by —
+# same page, always the full account-wide option list.
+CITY_FILTER_RE = re.compile(
+    r'data-ms="cities"[\s\S]*?<div class="multi-select-list">([\s\S]*?)<div class="multi-select-actions"'
+)
+CITY_CHECKBOX_RE = re.compile(r'<input type="checkbox" value="([^"]+)"')
+
 # Modal detail page bits (used for alert enrichment and reverification)
 MODAL_CSRF_RE = re.compile(r'name="csrfmiddlewaretoken" value="([^"]+)"')
 MODAL_CLIENT_RE = re.compile(r'data-client-name="([^"]*)"')
@@ -81,6 +89,15 @@ def parse_grid(html):
                 "date": d, "start": ts, "end": te,
             })
     return out
+
+
+def parse_available_cities(html):
+    """All cities offered by picster.app's own City: filter widget on this page,
+    regardless of which cities the grid request itself was filtered by."""
+    m = CITY_FILTER_RE.search(html)
+    if not m:
+        return []
+    return CITY_CHECKBOX_RE.findall(m.group(1))
 
 
 def build_month_url(base_url, cities, month_first_day, statuses=("booked",)):

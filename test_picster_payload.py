@@ -90,6 +90,31 @@ def modal_html(bid, csrf="TESTCSRF123", assignable=True, status="Active", client
     </div>'''
 
 
+def city_filter_html(cities):
+    """cities: list of (name, checked) — mirrors picster.app's own City: multi-select
+    widget, captured live 2026-09-26."""
+    items = ""
+    for name, checked in cities:
+        items += f'''
+            <label class="multi-select-item" data-text="{name.lower()}">
+                <input type="checkbox" value="{name}" {"checked" if checked else ""}>
+                <span>{name}</span>
+            </label>'''
+    return f'''
+        <div class="filter-field filter-field--city" style="order:1;">
+            <label>City:</label>
+            <div class="multi-select" data-ms="cities">
+                <div class="multi-select-panel">
+                    <div class="multi-select-list">{items}
+                    </div>
+                    <div class="multi-select-actions">
+                        <button data-action="apply">Apply</button>
+                    </div>
+                </div>
+            </div>
+        </div>'''
+
+
 class FakeResponse:
     def __init__(self, body, status=200):
         self._body, self.status = body, status
@@ -332,6 +357,35 @@ def scenario_parser():
     check("months include current", "2026-07-01" in months, str(months))
 
 
+def scenario_new_city_discovery():
+    print("\n--- new city in picster's City: filter widget → one-time alert, no auto-config ---")
+    alerts.clear()
+    entry = make_entry()
+    entry["cities"] = ["Testville"]
+    state = make_state()
+    state["known_cities"] = {"testville", "sampleton"}  # both already discovered in a prior run
+
+    html = grid_html([]) + city_filter_html([("Testville", True), ("Sampleton", False)])
+    watcher._check_new_cities_available(html, entry, state)
+    check("already-known cities (Testville, Sampleton) trigger no alert", not alerts, str(alerts))
+
+    html2 = grid_html([]) + city_filter_html(
+        [("Testville", True), ("Sampleton", False), ("Exampleport", False)])
+    watcher._check_new_cities_available(html2, entry, state)
+    check("new city (Exampleport) triggers exactly one alert",
+          sum(1 for a in alerts if "Exampleport" in a) == 1, str(alerts))
+    check("alert names this entry", any(entry["name"] in a for a in alerts), str(alerts))
+    check("entry['cities'] left untouched (alert-only, never auto-added)",
+          entry["cities"] == ["Testville"], str(entry["cities"]))
+
+    alerts.clear()
+    watcher._check_new_cities_available(html2, entry, state)
+    check("repeat sighting of Exampleport does not re-alert", not alerts, str(alerts))
+
+    persisted = json.load(open(watcher.KNOWN_CITIES_PATH, encoding="utf-8"))
+    check("known_cities.json persisted with exampleport", "exampleport" in persisted, str(persisted))
+
+
 async def live_smoke():
     print("\n--- LIVE (read-only): parse the real grid via CDP ---")
     from playwright.async_api import async_playwright
@@ -360,6 +414,7 @@ async def live_smoke():
 
 async def main():
     scenario_parser()
+    scenario_new_city_discovery()
     await scenario_claim_inside_window()
     await scenario_outside_window()
     await scenario_conflict()

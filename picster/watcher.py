@@ -22,6 +22,13 @@ brand new picster listing (like "Landmark: Premium" showing up under
 Sampleton) can't go unnoticed the way it did before, but it also can't start
 getting auto-claimed without a human choosing to add it.
 
+Same one-time-alert treatment for cities: the grid HTML already includes
+picster.app's own City: filter widget (its full account-wide city list, not
+just whatever this entry's `cities` filters by), so a newly unlocked city is
+parsed for free out of HTML already being fetched — no extra request. First
+sighting of a city not in `known_cities.json` fires an alert; it is never
+auto-added to this entry's `cities`.
+
 The same parse also keeps crew_schedule.json in sync: any card claimed by
 our crew member that isn't in the schedule yet gets recorded (replaces the
 old Legacy crew-sync loop — zero extra requests).
@@ -30,7 +37,6 @@ import asyncio
 import json
 import random
 from datetime import date, datetime, timedelta
-from pathlib import Path
 
 from picster.schedule import (
     find_conflict, get_tier_delay, is_in_date_range, load_crew_schedule,
@@ -38,10 +44,11 @@ from picster.schedule import (
 )
 from picster.subscribers import broadcast_alert
 from picster.booker import claim_booking, fetch_modal, _pending_slots
-from picster.parser import build_month_url, months_to_watch, parse_grid
+from picster.parser import build_month_url, months_to_watch, parse_grid, parse_available_cities
 from picster.driver_health import is_driver_dead
 
-KNOWN_TYPES_PATH = Path(__file__).resolve().parent.parent / "known_listing_types.json"
+KNOWN_TYPES_PATH = "known_listing_types.json"
+KNOWN_CITIES_PATH = "known_cities.json"
 
 # seen_ids only needs to cover bookings whose month is still in months_to_watch()
 # (which drops past months entirely — see parser.months_to_watch), so anything
@@ -60,6 +67,19 @@ def _load_known_types():
 
 def _save_known_types(known):
     with open(KNOWN_TYPES_PATH, "w", encoding="utf-8") as f:
+        json.dump(sorted(known), f, indent=2, ensure_ascii=False)
+
+
+def _load_known_cities():
+    try:
+        with open(KNOWN_CITIES_PATH, encoding="utf-8") as f:
+            return set(json.load(f))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return set()
+
+
+def _save_known_cities(known):
+    with open(KNOWN_CITIES_PATH, "w", encoding="utf-8") as f:
         json.dump(sorted(known), f, indent=2, ensure_ascii=False)
 
 
@@ -125,6 +145,29 @@ def _check_new_listing_type(booking, state):
         f"{booking['date']} {booking['start']}–{booking['end']}\n"
         f"Add it to picster_config.json's keywords if you want it auto-claimed.",
     )
+
+
+def _check_new_cities_available(html, entry, state):
+    """One-time alert the first time picster.app's own City: filter widget offers
+    a city not seen before — parsed from the grid HTML already fetched every poll,
+    so this costs no extra request. Alert only, never auto-added to this entry's
+    `cities`, same philosophy as _check_new_listing_type: a newly unlocked city
+    can't go unnoticed, but it also can't start being watched/claimed without a
+    human choosing to add it."""
+    known = state["known_cities"]
+    for city in parse_available_cities(html):
+        key = city.strip().lower()
+        if key in known:
+            continue
+        known.add(key)
+        _save_known_cities(known)
+        print(f"[DISCOVERY] new city available: {city}")
+        broadcast_alert(
+            state["subscribers"],
+            f"🌍 New city available on your Picster account: {city}\n"
+            f"Not in this entry's autobook cities yet ('{entry.get('name', '?')}') — "
+            f"add it in picster_config.json if you want bookings there watched/claimed.",
+        )
 
 
 async def _handle_new_booking(booking, entry, state, request_ctx, base_url):
@@ -248,6 +291,10 @@ async def run_grid_watcher(request_ctx, entry, state, config):
         state["known_types"] = _load_known_types() | {
             k.strip().lower() for k in entry.get("keywords", [])
         }
+    if "known_cities" not in state:
+        state["known_cities"] = _load_known_cities() | {
+            c.strip().lower() for c in entry.get("cities", [])
+        }
     consecutive_errors = 0
 
     print(f"[LIVE] grid watcher started — months: "
@@ -305,6 +352,11 @@ async def run_grid_watcher(request_ctx, entry, state, config):
 
             bookings = parse_grid(html)
             cycle_bookings.extend(bookings)
+
+            try:
+                _check_new_cities_available(html, entry, state)
+            except Exception as e:
+                print(f"[DISCOVERY] city check failed: {e}")
 
             if seed_key not in seeded_months:
                 seeded_months.add(seed_key)
