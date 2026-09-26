@@ -327,6 +327,10 @@
     function windowRowHtml(r, expanded) {
       r = r || {};
       var lt = JSON.stringify(r.listing_types || []);
+      var bufBefore = r.buffer_before_minutes !== undefined ? r.buffer_before_minutes : 15;
+      var bufAfter = r.buffer_after_minutes !== undefined ? r.buffer_after_minutes : 15;
+      var bufBeforeNeg = bufBefore < 0;
+      var bufAfterNeg = bufAfter < 0;
       return [
         '<div class="bw-row' + (expanded ? '' : ' collapsed') + '">',
           '<div class="flex items-center justify-between gap-2">',
@@ -354,9 +358,17 @@
               '<p class="bw-types-hint text-xs" style="color:var(--text-faint);display:none"></p>',
               '<input type="hidden" class="bw-listing-types" value=\'' + esc(lt) + '\'>',
             '</div>',
-            '<div class="flex gap-3 items-end">',
-              '<div><p class="field-label" style="font-size:11px">Gap before (min)</p><input type="number" class="bw-buf-before" min="0" step="5" value="' + esc(r.buffer_before_minutes !== undefined ? r.buffer_before_minutes : 15) + '" style="width:80px"></div>',
-              '<div><p class="field-label" style="font-size:11px">Gap after (min)</p><input type="number" class="bw-buf-after" min="0" step="5" value="' + esc(r.buffer_after_minutes !== undefined ? r.buffer_after_minutes : 15) + '" style="width:80px"></div>',
+            '<div class="flex gap-3 items-end flex-wrap">',
+              '<div><p class="field-label" style="font-size:11px">Gap before (min)</p><input type="number" class="bw-buf-before" min="' + (bufBeforeNeg ? '-90' : '0') + '" step="5" value="' + esc(bufBefore) + '" style="width:80px"></div>',
+              '<label class="flex items-center gap-1" style="cursor:pointer" title="Lets this window claim a booking that starts before the NEXT booking begins — enter minutes as negative, e.g. -30">',
+                '<input type="checkbox" class="bw-buf-before-overlap"' + (bufBeforeNeg ? ' checked' : '') + '>',
+                '<span style="font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.15);padding:1px 5px;border-radius:4px;white-space:nowrap">⚠ Overlap</span>',
+              '</label>',
+              '<div><p class="field-label" style="font-size:11px">Gap after (min)</p><input type="number" class="bw-buf-after" min="' + (bufAfterNeg ? '-90' : '0') + '" step="5" value="' + esc(bufAfter) + '" style="width:80px"></div>',
+              '<label class="flex items-center gap-1" style="cursor:pointer" title="Lets this window claim a booking that starts before the PREVIOUS booking ends — enter minutes as negative, e.g. -30">',
+                '<input type="checkbox" class="bw-buf-after-overlap"' + (bufAfterNeg ? ' checked' : '') + '>',
+                '<span style="font-size:10px;font-weight:700;color:#f59e0b;background:rgba(245,158,11,0.15);padding:1px 5px;border-radius:4px;white-space:nowrap">⚠ Overlap</span>',
+              '</label>',
             '</div>',
           '</div>',
         '</div>',
@@ -386,12 +398,41 @@
       });
     }
 
+    function clampBufferInput(input, checkbox) {
+      var v = parseInt(input.value, 10);
+      if (isNaN(v)) v = 0;
+      if (checkbox.checked) {
+        if (v > 0) v = 0;
+        if (v < -90) v = -90;
+      } else if (v < 0) {
+        v = 0;
+      }
+      input.value = v;
+    }
+
+    function wireOverlapToggle(row, kind) {
+      var input = row.querySelector('.bw-buf-' + kind);
+      var checkbox = row.querySelector('.bw-buf-' + kind + '-overlap');
+      checkbox.addEventListener('change', function() {
+        if (checkbox.checked) {
+          input.min = '-90';
+          if (parseInt(input.value, 10) >= 0 || isNaN(parseInt(input.value, 10))) input.value = '-30';
+        } else {
+          input.min = '0';
+          if (parseInt(input.value, 10) < 0) input.value = '0';
+        }
+      });
+      input.addEventListener('change', function() { clampBufferInput(input, checkbox); });
+    }
+
     function addWindowRow(container, r, cardIdx, expanded) {
       var tmp = document.createElement('div');
       tmp.innerHTML = windowRowHtml(r, !!expanded);
       var row = tmp.firstElementChild;
       container.appendChild(row);
       wireWindowToggle(row);
+      wireOverlapToggle(row, 'before');
+      wireOverlapToggle(row, 'after');
       refreshWindowTypeChips(row, cardIdx);
     }
 
