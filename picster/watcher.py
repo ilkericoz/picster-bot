@@ -32,6 +32,12 @@ auto-added to this entry's `cities`.
 The same parse also keeps crew_schedule.json in sync: any card claimed by
 our crew member that isn't in the schedule yet gets recorded (replaces the
 old Legacy crew-sync loop — zero extra requests).
+
+A schedule conflict hit during the autobook decision is re-verified live
+(one modal fetch) before it's trusted: picster/reverifier.py only sweeps
+crew_schedule.json for cancellations every 30 minutes, so a slot canceled
+and immediately rebooked for the same date/time can otherwise cause a false
+CONFLICT against a booking that no longer exists.
 """
 import asyncio
 import json
@@ -40,7 +46,7 @@ from datetime import date, datetime, timedelta
 
 from picster.schedule import (
     find_conflict, get_tier_delay, is_in_date_range, load_crew_schedule,
-    times_overlap, SCHEDULE_BUFFER_MINUTES,
+    remove_slot, times_overlap, SCHEDULE_BUFFER_MINUTES,
 )
 from picster.subscribers import broadcast_alert
 from picster.booker import claim_booking, fetch_modal, _pending_slots
@@ -170,6 +176,29 @@ def _check_new_cities_available(html, entry, state):
         )
 
 
+async def _conflict_is_stale(request_ctx, base_url, conflict):
+    """True if a crew_schedule conflict was actually canceled on picster's side.
+
+    crew_schedule.json is only swept for cancellations every REVERIFY_INTERVAL_SECONDS
+    (picster/reverifier.py), so a slot that just got canceled and immediately
+    rebooked (same date/time, new booking id) can still sit in the schedule as a
+    live-looking entry — the new booking then gets a false CONFLICT against a
+    booking that no longer exists. One extra modal fetch here, only when a
+    conflict is actually hit, closes that race instead of just narrowing it.
+    """
+    if not str(conflict.get("source", "")).startswith("picster") or not conflict.get("uuid"):
+        return False  # not a picster-uuid slot (e.g. old Legacy-era entry) — can't verify, don't touch
+    try:
+        status, modal = await fetch_modal(request_ctx, base_url, conflict["uuid"])
+    except Exception:
+        return False  # can't verify — treat conservatively as still conflicting
+    if status == 404:
+        return True
+    if modal and modal.get("status") and modal["status"].lower() != "active":
+        return True
+    return False
+
+
 async def _handle_new_booking(booking, entry, state, request_ctx, base_url):
     """Alert + autobook decision for one newly appeared grid booking."""
     _check_new_listing_type(booking, state)
@@ -235,6 +264,16 @@ async def _handle_new_booking(booking, entry, state, request_ctx, base_url):
 
     conflict = find_conflict(booking_date, booking["start"], booking["end"],
                              buf_before, buf_after)
+    if conflict and await _conflict_is_stale(request_ctx, base_url, conflict):
+        print(f"[AUTOBOOK] Conflict slot #{conflict['uuid']} already canceled on picster — clearing stale entry")
+        remove_slot(conflict["uuid"])
+        broadcast_alert(
+            state["subscribers"],
+            f"Cleared a stale schedule conflict (that booking was already canceled):\n"
+            f"{conflict['name']} — {conflict['tour']} @ {conflict['time_start']}–{conflict['time_end']}",
+        )
+        conflict = find_conflict(booking_date, booking["start"], booking["end"],
+                                 buf_before, buf_after)
     if conflict:
         print(f"[AUTOBOOK] Conflict — {conflict['name']} @ "
               f"{conflict['time_start']}–{conflict['time_end']}")

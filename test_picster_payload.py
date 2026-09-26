@@ -241,7 +241,7 @@ async def scenario_outside_window():
 
 
 async def scenario_conflict():
-    print("\n--- new booking conflicts with existing slot → no claim ---")
+    print("\n--- new booking conflicts with existing (still-active) slot → no claim ---")
     alerts.clear()
     booker._pending_slots.clear()
     from picster.schedule import save_crew_schedule
@@ -249,12 +249,38 @@ async def scenario_conflict():
                          "time_end": "19:00", "name": "Existing", "tour": "T", "source": "picster"}])
     ctx = FakeRequestCtx()
     ctx.modals["103"] = (200, modal_html("103"))
+    # The conflicting slot's own modal is fetched to confirm it's still live before
+    # trusting it as a conflict (see scenario_stale_conflict_cleared) — status Active.
+    ctx.modals["X1"] = (200, modal_html("X1", status="Active"))
     booking = {"id": "103", "city": "Testville", "shoot": "Private Photoshoot 📸",
                "crew": "", "date": TOMORROW, "start": "18:15", "end": "18:45"}
     await watcher._handle_new_booking(booking, make_entry(), make_state(), ctx, "https://picster.app")
     await asyncio.sleep(0.2)
     check("no claim POST", not ctx.posts, str(ctx.posts))
     check("conflict alert", any("CONFLICT" in a for a in alerts), str(alerts))
+    save_crew_schedule([])
+
+
+async def scenario_stale_conflict_cleared():
+    print("\n--- new booking conflicts with an already-canceled slot → stale entry cleared, claim proceeds ---")
+    alerts.clear()
+    booker._pending_slots.clear()
+    from picster.schedule import save_crew_schedule
+    save_crew_schedule([{"uuid": "X2", "date": TOMORROW, "time_start": "18:00",
+                         "time_end": "19:00", "name": "Existing", "tour": "T", "source": "picster"}])
+    ctx = FakeRequestCtx()
+    ctx.modals["106"] = (200, modal_html("106"))
+    # X2 was canceled on picster's side (crew_schedule.json hasn't caught up yet —
+    # reverifier only sweeps every 30 min) — its modal now 404s.
+    booking = {"id": "106", "city": "Testville", "shoot": "Private Photoshoot 📸",
+               "crew": "", "date": TOMORROW, "start": "18:15", "end": "18:45"}
+    await watcher._handle_new_booking(booking, make_entry(), make_state(), ctx, "https://picster.app")
+    await asyncio.sleep(0.2)
+    check("claim POST sent despite stale conflict", len(ctx.posts) == 1, f"posts={ctx.posts}")
+    check("stale-conflict-cleared alert", any("stale schedule conflict" in a for a in alerts), str(alerts))
+    check("no CONFLICT alert", not any("Booking CONFLICT" in a for a in alerts), str(alerts))
+    sched = json.load(open("crew_schedule.json", encoding="utf-8")) if os.path.exists("crew_schedule.json") else []
+    check("stale entry removed from crew_schedule.json", not any(s["uuid"] == "X2" for s in sched), str(sched))
     save_crew_schedule([])
 
 
@@ -418,6 +444,7 @@ async def main():
     await scenario_claim_inside_window()
     await scenario_outside_window()
     await scenario_conflict()
+    await scenario_stale_conflict_cleared()
     await scenario_already_claimed_on_modal()
     await scenario_claimed_card_not_autoclaimed()
     await scenario_watcher_loop()

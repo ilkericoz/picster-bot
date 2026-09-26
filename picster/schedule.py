@@ -35,6 +35,16 @@ def record_slot(uuid, booking_date, time_start, time_end, booking_name, tour, so
     save_crew_schedule(schedule)
 
 
+def remove_slot(uuid):
+    """Drop one entry by uuid (e.g. once confirmed canceled on picster's side)."""
+    schedule = load_crew_schedule()
+    filtered = [s for s in schedule if s.get("uuid") != uuid]
+    if len(filtered) != len(schedule):
+        save_crew_schedule(filtered)
+        return True
+    return False
+
+
 def parse_booking_datetime(text):
     """Parse 'Wednesday, 20 May 2026 @ 17:00' → (date, time_start, time_end)."""
     m = re.search(r'(\d{1,2} \w+ \d{4}) @ (\d{1,2}:\d{2})(?:\s*[–\-—]\s*(\d{1,2}:\d{2}))?', text)
