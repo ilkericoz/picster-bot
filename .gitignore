@@ -28,6 +28,6 @@ picster_config.backup_*.json
 *.eml
 .claude
 
-# Local scratch — session data, never commit
-legacy source files/
-legacy_api_capture.jsonl
+# Chat screenshots dropped into the repo folder — never commit
+*.jpg
+*.jpeg

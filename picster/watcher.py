@@ -18,8 +18,8 @@ in the newly-added city as "new".
 Any listing name never seen before (regardless of whether it matches
 `keywords`) gets a one-time "new listing type" alert via
 `known_listing_types.json` — alert only, never auto-added to `keywords`, so a
-brand new picster listing (like "Landmark: Premium" showing up under
-Sampleton) can't go unnoticed the way it did before, but it also can't start
+brand new picster listing (like a new premium tier showing up under
+a second city) can't go unnoticed the way it did before, but it also can't start
 getting auto-claimed without a human choosing to add it.
 
 Same one-time-alert treatment for cities: the grid HTML already includes
@@ -30,8 +30,8 @@ sighting of a city not in `known_cities.json` fires an alert; it is never
 auto-added to this entry's `cities`.
 
 The same parse also keeps crew_schedule.json in sync: any card claimed by
-our crew member that isn't in the schedule yet gets recorded (replaces the
-old Legacy crew-sync loop — zero extra requests).
+our crew member that isn't in the schedule yet gets recorded (zero extra
+requests).
 
 A schedule conflict hit during the autobook decision is re-verified live
 (one modal fetch) before it's trusted: picster/reverifier.py only sweeps
@@ -113,7 +113,7 @@ def _sync_crew_slots(bookings, crew_name, state):
     for b in ours:
         if b["id"] in known_ids:
             continue
-        # Same physical slot may exist under a Legacy uuid — skip duplicates.
+        # Same physical slot may exist under an older uuid — skip duplicates.
         dup = any(
             s.get("date") == b["date"]
             and s.get("time_start") == b["start"]
@@ -187,7 +187,7 @@ async def _conflict_is_stale(request_ctx, base_url, conflict):
     conflict is actually hit, closes that race instead of just narrowing it.
     """
     if not str(conflict.get("source", "")).startswith("picster") or not conflict.get("uuid"):
-        return False  # not a picster-uuid slot (e.g. old Legacy-era entry) — can't verify, don't touch
+        return False  # not a picster-uuid slot (e.g. an older entry) — can't verify, don't touch
     try:
         status, modal = await fetch_modal(request_ctx, base_url, conflict["uuid"])
     except Exception:
@@ -344,7 +344,7 @@ async def run_grid_watcher(request_ctx, entry, state, config):
         cycle_ok = True
 
         for month in months_to_watch(entry, months_ahead):
-            cities = entry.get("cities", ["Testville"])
+            cities = entry.get("cities", [])
             # Keyed on cities too, not just month: if the config's city list
             # changes mid-run (e.g. a city gets added), the newly-visible
             # bookings for an already-seeded month must be seeded silently

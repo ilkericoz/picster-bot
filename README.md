@@ -1,6 +1,6 @@
 # picster-bot
 
-Watches the [picster.app](https://picster.app) bookings grid for new photoshoot bookings in Testville, alerts subscribers on Telegram, and auto-claims ("Assign myself") bookings that fall inside configured date/time windows.
+Watches the [picster.app](https://picster.app) bookings grid for new photoshoot bookings in the configured cities, alerts subscribers on Telegram, and auto-claims ("Assign myself") bookings that fall inside configured date/time windows.
 
 ## How it works
 
@@ -30,6 +30,7 @@ playwright install chromium   # only the playwright driver is used (CDP attach)
 | Key | Description |
 |-----|-------------|
 | `crew_name` | Crew member name to match against assigned crew |
+| `urls[].cities` | Cities to watch (omit to watch every city the account can see) |
 | `urls[].keywords` | Listing names that trigger alerts |
 | `urls[].autobook` | Master switch for auto-claiming |
 | `urls[].autobook_date_ranges` | Windows (`from`/`to` dates, `time_from`/`time_to`, per-window `listing_types`, buffers) inside which bookings are claimed |
